@@ -111,6 +111,14 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 }
 .install-log .lg{color:var(--fg2)}.install-log .gn{color:var(--green)}
 .install-log .rd{color:var(--red)}.install-log .bl{color:var(--blue)}.install-log .gl{color:var(--gold)}
+#diag-panel{margin-top:10px}
+#diag-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#diag-title{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.12em;color:var(--fg2);text-transform:uppercase;flex:1}
+#diag-copy{background:none;border:1px solid var(--border);border-radius:4px;color:var(--fg2);font-size:10px;padding:2px 8px;cursor:pointer;letter-spacing:.05em}
+#diag-copy:hover{color:var(--gold);border-color:var(--gold)}
+#conn-log{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px 14px;font-family:monospace;font-size:11px;line-height:1.65;max-height:160px;overflow-y:auto}
+#conn-log .lg{color:var(--fg2)}#conn-log .gn{color:var(--green)}#conn-log .rd{color:var(--red)}#conn-log .bl{color:var(--blue)}#conn-log .gl{color:var(--gold)}
+#conn-log .lbl-h{color:#60a5fa}#conn-log .lbl-g{color:#4ade80}
 
 #mods-section h2{
   font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);
@@ -297,6 +305,13 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <div class="stat-card" id="stat-turn-card" style="display:none"><div class="stat-label">Turno em jogo</div><div class="stat-value" id="stat-turn">—</div></div>
     </div>
     <div class="install-log" id="install-log"><span class="lg">Aguardando servidor local em localhost:8766...</span></div>
+    <div id="diag-panel">
+      <div id="diag-header">
+        <div id="diag-title">Diagnóstico de Ligação</div>
+        <button id="diag-copy" onclick="diagCopy()">Copiar log</button>
+      </div>
+      <div id="conn-log"><span class="lg">Aguardando eventos de ligação...</span></div>
+    </div>
   </div>
 
   <div id="mods-section">
@@ -559,6 +574,49 @@ function renderLog(log){
   el.scrollTop=el.scrollHeight;
 }
 
+var _lastConnLogLen=0;
+function renderConnLog(log){
+  var el=document.getElementById('conn-log');
+  if(!log||!log.length) return;
+  if(log.length===_lastConnLogLen) return;
+  _lastConnLogLen=log.length;
+  var colorMap={green:'gn',red:'rd',blue:'bl',gold:'gl'};
+  el.innerHTML='';
+  for(var i=0;i<log.length;i++){
+    var entry=log[i];
+    var raw=String(entry[0]||entry.msg||'');
+    var col=String(entry[1]||entry.c||'');
+    var cls=colorMap[col]||'lg';
+    // Highlight [ANFITRIÃO] and [CONVIDADO] labels
+    var safe=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    safe=safe.replace(/\[ANFITRIÃO\]/g,'<span class="lbl-h">[ANFITRIÃO]</span>');
+    safe=safe.replace(/\[CONVIDADO\]/g,'<span class="lbl-g">[CONVIDADO]</span>');
+    var d=document.createElement('div');d.className=cls;d.innerHTML=safe;
+    el.appendChild(d);
+  }
+  el.scrollTop=el.scrollHeight;
+}
+
+function diagCopy(){
+  var el=document.getElementById('conn-log');
+  var lines=[];
+  el.querySelectorAll('div').forEach(function(d){lines.push(d.textContent);});
+  var text=lines.join('\n');
+  var btn=document.getElementById('diag-copy');
+  try{
+    navigator.clipboard.writeText(text).then(function(){
+      btn.textContent='Copiado!';setTimeout(function(){btn.textContent='Copiar log';},2000);
+    }).catch(function(){fallbackCopy(text,btn);});
+  }catch(e){fallbackCopy(text,btn);}
+}
+function fallbackCopy(text,btn){
+  var ta=document.createElement('textarea');ta.value=text;
+  ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  btn.textContent='Copiado!';setTimeout(function(){btn.textContent='Copiar log';},2000);
+}
+
 function enterHostMode(){
   if(_modeSet&&_isHost) return;
   _modeSet=true;_isHost=true;
@@ -617,6 +675,7 @@ function pollStatus(){
       setStatVal('stat-install',istMap[ist]||ist,istCls);
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
+      if(d.conn_log) renderConnLog(d.conn_log);
       if(d.turn_state&&d.turn_state.round) updateTurnState(d.turn_state);
       var ipIn=document.getElementById('my-ip-input');
       if(d.tailscale_ip){

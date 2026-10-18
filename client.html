@@ -276,6 +276,7 @@ function doConnect() {
   if (_connTimeout) clearTimeout(_connTimeout);
   _connTimeout = setTimeout(() => {
     if (ws && ws.readyState !== WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `TIMEOUT 12s — sem resposta em ${ip}:${RELAY_PORT}`, c: 'red' })); } catch {}
       ws.close();
       log(`Timeout (12s) — servidor não respondeu em ${ip}:${RELAY_PORT}`, 'red');
       log('Verificar:', 'gold');
@@ -304,15 +305,23 @@ function doConnect() {
   ws.onopen = () => {
     clearTimeout(_connTimeout);
     ws.send(JSON.stringify({ type: 'HELLO', role: 'client' }));
+    ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `WebSocket ligado a ${ip}:${RELAY_PORT}`, c: 'green' }));
+    ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `Browser: ${navigator.userAgent.substring(0,60)}`, c: '' }));
     log('Socket aberto. Aguardando confirmação…', 'blue');
   };
 
   ws.onmessage = ev => {
     let msg; try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'STATE') {
-      if (msg.friend) { showSuccess(); log('Host já estava online!', 'green'); }
-      else { setStatus('Aguardando host…', 'Relay ligado, host ainda não chegou', 'connecting'); log('Relay ligado — aguarda o host.', 'gold'); }
+      if (msg.friend) {
+        ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: 'Anfitrião já estava online — ligação completa', c: 'green' }));
+        showSuccess(); log('Host já estava online!', 'green');
+      } else {
+        ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: 'Relay ligado — aguardando Anfitrião entrar', c: 'gold' }));
+        setStatus('Aguardando host…', 'Relay ligado, host ainda não chegou', 'connecting'); log('Relay ligado — aguarda o host.', 'gold');
+      }
     } else if (msg.type === 'PEER_CONNECTED' && msg.role === 'host') {
+      ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: 'Anfitrião conectou — ligação pronta para jogar!', c: 'green' }));
       log('🟢 Host conectou!', 'gold'); showSuccess();
     } else if (msg.type === 'PEER_DISCONNECTED' && msg.role === 'host') {
       log('Host desconectou.', 'red');
@@ -349,6 +358,8 @@ function doConnect() {
     }
     setStatus('Falha na ligação', 'Verifica o log para instruções', 'error');
     btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    // Try to send error log even if ws might still be open briefly
+    try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `ERRO: falha WebSocket a ${ip}:${RELAY_PORT}`, c: 'red' })); } catch {}
   };
 
   ws.onclose = (e) => {
