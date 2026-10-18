@@ -45,6 +45,7 @@ _mod_lists: dict   = {}
 _char_split: dict  = {}
 _pending_dl: str | None = None   # nome do mod aguardando download manual
 _dl_seen: set      = set()       # ficheiros já vistos em Downloads/
+_loop              = None         # asyncio event loop (set in main)
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
 
@@ -762,6 +763,19 @@ class _HTTP(BaseHTTPRequestHandler):
             body = json.dumps({"log": _install_log, "status": _install_status}).encode()
             return self._reply(200,"application/json", body)
 
+        if path == "/api/nexus/install-start":
+            if not from_local:
+                return self._reply(403,"application/json", b'{"error":"forbidden"}')
+            id_str = params.get("id","0")
+            if not id_str.isdigit():
+                return self._reply(400,"application/json", b'{"error":"bad id"}')
+            mod_id = int(id_str)
+            mod_name = params.get("name","Mod")[:100]
+            if _loop is not None:
+                asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
+                return self._reply(200,"application/json", b'{"status":"started"}')
+            return self._reply(503,"application/json", b'{"error":"loop not ready"}')
+
         if path == "/api/nexus/uninstall":
             name = params.get("name","")
             if name:
@@ -797,7 +811,45 @@ def _run_http():
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
+class _MockWS:
+    """Fake WebSocket that routes messages to _install_log via _ilog."""
+    async def send(self, msg_json: str):
+        try:
+            msg = json.loads(msg_json)
+            t = msg.get("type", "")
+            if t == "LOG":
+                await _ilog(msg.get("msg", ""), msg.get("c", ""))
+            elif t == "NEXUS_INSTALLED":
+                await _ilog(f"✓ '{msg.get('orig_name','')}' instalado.", "green")
+            elif t == "NEXUS_OPEN_BROWSER":
+                import webbrowser
+                webbrowser.open(msg.get("url", ""))
+                await _ilog(msg.get("msg", "Abre o browser para download manual."), "gold")
+        except Exception:
+            pass
+
+
+async def _nx_install_http(mod_id: int, mod_name: str):
+    """Install a Nexus mod triggered from the HTTP API (no WebSocket)."""
+    api_key = _load_config().get("nx_key", "")
+    file_id = None
+    if api_key:
+        try:
+            files = await asyncio.to_thread(_nx_mod_files, api_key, mod_id)
+            main_file = next(
+                (f for f in files if f.get("category_name") in ("MAIN", "Main")),
+                files[0] if files else None,
+            )
+            if main_file:
+                file_id = main_file.get("file_id") or main_file.get("id")
+        except Exception as e:
+            await _ilog(f"Não foi possível listar ficheiros: {e}", "red")
+    await _nx_install_ws(_MockWS(), mod_id, mod_name, api_key, file_id)
+
+
 async def main():
+    global _loop
+    _loop = asyncio.get_running_loop()
     detect_local_ip()
     threading.Thread(target=_run_http, daemon=True).start()
     print(f"\n{'='*52}\n  Zero Company MP\n{'='*52}")

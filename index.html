@@ -291,6 +291,7 @@ let currentFilter='all';
 document.getElementById('btn-host').addEventListener('click',function(){
   const panel=document.getElementById('share-panel');
   panel.style.display=panel.style.display==='block'?'none':'block';
+  // Auto-fill IP from local server if running
   fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2000)})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -298,9 +299,8 @@ document.getElementById('btn-host').addEventListener('click',function(){
         document.getElementById('my-ip-input').value=d.local_ip;
         generateLink();
       }
-      window.open(LOCAL,'swmp_host');
     })
-    .catch(function(){ window.open(LOCAL,'swmp_host'); });
+    .catch(function(){});
 });
 
 document.getElementById('btn-client').addEventListener('click',function(){
@@ -430,6 +430,39 @@ document.querySelectorAll('.filter-btn').forEach(function(btn){
   });
 });
 
+var _installing=new Set();
+
+function installMod(modId,name,btn){
+  if(_installing.has(modId)) return;
+  _installing.add(modId);
+  btn.textContent='INSTALANDO...';btn.disabled=true;btn.style.opacity='0.7';
+  fetch(LOCAL+'/api/nexus/install-start?id='+modId+'&name='+encodeURIComponent(name),
+        {signal:AbortSignal.timeout(5000)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.status==='started'){
+        btn.textContent='A INSTALAR...';
+        var tries=0;
+        var poll=setInterval(function(){
+          tries++;
+          if(installedMods.has(name.toLowerCase())){
+            clearInterval(poll);_installing.delete(modId);renderGrid();
+          }
+          if(tries>60){clearInterval(poll);_installing.delete(modId);renderGrid();}
+        },3000);
+      } else {
+        btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+        _installing.delete(modId);
+      }
+    })
+    .catch(function(){
+      document.getElementById('install-log').innerHTML=
+        '<div class="rd">Servidor local offline. Inicia o start.bat primeiro.</div>';
+      btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+      _installing.delete(modId);
+    });
+}
+
 function renderGrid(){
   var grid=document.getElementById('mods-grid');
   var mods=allMods.filter(function(m){return m.name&&m.mod_id;});
@@ -491,10 +524,11 @@ function renderGrid(){
 
     if(!inst){
       var btn=card.querySelector('.install-btn');
+      if(_installing.has(m.mod_id)){
+        btn.textContent='A INSTALAR...';btn.disabled=true;btn.style.opacity='0.7';
+      }
       (function(modId,modName,b){
-        b.addEventListener('click',function(){
-          window.open(LOCAL+'?nx_install='+modId+'&nx_name='+encodeURIComponent(modName),'swmp_host');
-        });
+        b.addEventListener('click',function(){ installMod(modId,modName,b); });
       })(m.mod_id,m.name,btn);
     }
     grid.appendChild(card);
