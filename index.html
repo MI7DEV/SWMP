@@ -258,6 +258,7 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <div class="stat-card"><div class="stat-label">Jogo</div><div class="stat-value" id="stat-game">—</div></div>
       <div class="stat-card"><div class="stat-label">Mods instalados</div><div class="stat-value gold" id="stat-mods">—</div></div>
       <div class="stat-card"><div class="stat-label">Instalação</div><div class="stat-value" id="stat-install">—</div></div>
+      <div class="stat-card" id="stat-turn-card" style="display:none"><div class="stat-label">Turno em jogo</div><div class="stat-value" id="stat-turn">—</div></div>
     </div>
     <div class="install-log" id="install-log"><span class="lg">Aguardando servidor local em localhost:8766...</span></div>
   </div>
@@ -388,6 +389,20 @@ function setStatVal(id,val,cls){
   el.className='stat-value'+(cls?' '+cls:'');
 }
 
+function updateTurnState(ts){
+  if(!ts||!ts.round) return;
+  var card=document.getElementById('stat-turn-card');
+  var el=document.getElementById('stat-turn');
+  card.style.display='block';
+  var isPlayerTurn=ts.is_player_turn;
+  var round='Rnd '+ts.round;
+  var label=isPlayerTurn===true?'Teu turno ▶':isPlayerTurn===false?'Turno inimigo ⏳':'Rnd '+ts.round;
+  var cls=isPlayerTurn===true?'gold':isPlayerTurn===false?'':'ok';
+  if(isPlayerTurn===true) el.style.animation='running-pulse 1.5s infinite alternate';
+  else el.style.animation='none';
+  setStatVal('stat-turn',label,cls);
+}
+
 function renderLog(log){
   var el=document.getElementById('install-log');
   if(!log||!log.length) return;
@@ -452,6 +467,7 @@ function pollStatus(){
       setStatVal('stat-install',istMap[ist]||ist,istCls);
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
+      if(d.turn_state&&d.turn_state.round) updateTurnState(d.turn_state);
       var ipIn=document.getElementById('my-ip-input');
       if(d.tailscale_ip){
         if(!ipIn.value||ipIn.value===d.local_ip){ipIn.value=d.tailscale_ip;generateLink();}

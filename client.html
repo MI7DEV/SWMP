@@ -295,6 +295,17 @@ function doConnect() {
       document.getElementById('panel-ok').style.display = 'none';
       document.getElementById('btn').style.display = 'block';
       btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    } else if (msg.type === 'TURN_STATE') {
+      const ts = msg.data || {};
+      if (ts.round) {
+        const isPlayerTurn = ts.is_player_turn;
+        const label = isPlayerTurn === true
+          ? `Teu turno ▶ (Rnd ${ts.round})`
+          : isPlayerTurn === false
+            ? `Turno inimigo ⏳ (Rnd ${ts.round})`
+            : `Rnd ${ts.round}`;
+        log(label, isPlayerTurn === true ? 'gold' : '');
+      }
     } else if (msg.type === 'LOG') {
       log(msg.msg, msg.c || '');
     }

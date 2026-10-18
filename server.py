@@ -47,6 +47,7 @@ _char_split: dict  = {}
 _pending_dl: str | None = None   # nome do mod aguardando download manual
 _dl_seen: set      = set()       # ficheiros já vistos em Downloads/
 _loop              = None         # asyncio event loop (set in main)
+_turn_state: dict  = {}          # último estado de turno recebido do Lua
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
 
@@ -560,7 +561,7 @@ async def ws_handler(ws):
             "relay_port":RELAY_PORT,"game_found":GAME_ROOT is not None,
             "friend":other in _clients,"install_status":_install_status,
             "my_mods":list_mods(),"char_split":_char_split,
-            "tailscale_ip":_tailscale_ip,
+            "tailscale_ip":_tailscale_ip,"turn_state":_turn_state,
         }))
         if role == "host":
             for lm,lc in _install_log:
@@ -664,6 +665,7 @@ async def watch_game():
         await asyncio.sleep(3)
 
 async def watch_sync_out():
+    global _turn_state
     last = 0.0
     while True:
         await asyncio.sleep(0.5)
@@ -673,8 +675,17 @@ async def watch_sync_out():
             if mtime <= last: continue
             last = mtime
             data = json.loads(SYNC_OUT.read_text(encoding="utf-8"))
-            if "client" in _clients:
-                await _clients["client"].send(json.dumps({"type":"SYNC_ACTION","data":data}))
+            msg_type = data.get("type","")
+            if msg_type == "TURN_STATE":
+                # Estado de turno: guardar globalmente e broadcast para ambos
+                _turn_state = data
+                await broadcast({"type":"TURN_STATE","data":data})
+            else:
+                # Outras acções de sync: reencaminhar para o outro jogador
+                src_role = data.get("role","host")
+                other    = "client" if src_role == "host" else "host"
+                if other in _clients:
+                    await _clients[other].send(json.dumps({"type":"SYNC_ACTION","data":data}))
         except Exception: pass
 
 async def watch_downloads():
@@ -750,6 +761,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 "explorer_done":_explorer_done,"install_status":_install_status,
                 "my_mods":list_mods(),"pak_mods":list_paks(),
                 "ws_clients":list(_clients.keys()),
+                "turn_state":_turn_state,
             }
             if from_local:
                 info["install_log"] = _install_log[-12:]
