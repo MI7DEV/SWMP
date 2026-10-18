@@ -749,10 +749,10 @@ class _HTTP(BaseHTTPRequestHandler):
                 "game_running":_game_running,"game_found":GAME_ROOT is not None,
                 "explorer_done":_explorer_done,"install_status":_install_status,
                 "my_mods":list_mods(),"pak_mods":list_paks(),
-                "tailscale_ip":_tailscale_ip,
             }
             if from_local:
                 info["install_log"] = _install_log[-12:]
+                info["tailscale_ip"] = _tailscale_ip
             body = json.dumps(info).encode()
             return self._reply(200,"application/json", body)
 
