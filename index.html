@@ -177,15 +177,27 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 <div class="stars" id="stars"></div>
 
 <div id="join-screen">
-  <div class="join-spinner"></div>
-  <div class="join-title">LIGANDO AO SERVIDOR</div>
+  <div class="join-spinner" id="join-spinner"></div>
+  <div class="join-title" id="join-title">LIGANDO AO SERVIDOR</div>
   <div class="join-sub" id="join-host-text"></div>
-  <div id="join-ts-notice" style="display:none;max-width:380px;padding:12px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:8px;font-size:12px;color:#93c5fd;line-height:1.6;text-align:left">
-    <strong style="color:#60a5fa">Este servidor usa Tailscale.</strong><br>
-    Precisas do Tailscale instalado para conectar.<br>
-    <a href="https://tailscale.com/download" target="_blank" style="color:#38bdf8;text-decoration:underline">Instalar Tailscale (gratuito) →</a><br>
-    <span style="color:#64748b;font-size:11px">Depois de instalar e fazer login, clica o link novamente.</span>
+  <div id="join-ts-notice" style="display:none;max-width:400px;padding:14px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:8px;font-size:12px;color:#93c5fd;line-height:1.8;text-align:left">
+    <strong style="color:#60a5fa;font-size:13px">⚠ Este servidor usa Tailscale</strong><br>
+    Para connectar pela internet precisas de:<br>
+    <strong style="color:#e2e8f0">1.</strong> Ter Tailscale instalado → <a href="https://tailscale.com/download" target="_blank" style="color:#38bdf8;text-decoration:underline">tailscale.com/download</a><br>
+    <strong style="color:#e2e8f0">2.</strong> O host tem de te <strong style="color:#fbbf24">convidar para a rede Tailscale dele</strong>:<br>
+    <span style="margin-left:12px;color:#94a3b8">→ login.tailscale.com/admin/users → "Invite users"</span><br>
+    <strong style="color:#e2e8f0">3.</strong> Aceita o convite e liga o Tailscale, depois clica de novo.<br>
+    <span style="color:#ef4444;font-size:11px;margin-top:4px;display:block">❌ Instalar Tailscale sozinho não chega — precisas de estar na rede do host!</span>
   </div>
+  <div id="join-error-notice" style="display:none;max-width:400px;padding:12px 16px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;font-size:12px;color:#fca5a5;line-height:1.7;text-align:left">
+    <strong style="color:#f87171">Servidor não acessível.</strong><br>
+    Verifica:<br>
+    • O host tem o start.bat a correr?<br>
+    • Estás na rede Tailscale do host? (ver aviso azul acima)<br>
+    • O IP é <span id="join-error-ip"></span>?<br>
+    <button onclick="location.reload()" style="margin-top:8px;padding:6px 14px;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.5);border-radius:4px;color:#fca5a5;cursor:pointer;font-size:11px">↩ Voltar</button>
+  </div>
+  <button id="join-cancel-btn" onclick="joinCancel()" style="margin-top:8px;padding:8px 20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#64748b;cursor:pointer;font-size:12px;display:none">Cancelar</button>
 </div>
 
 <div id="modal-overlay">
@@ -292,6 +304,14 @@ let installedMods=new Set();
 let currentFilter='all';
 
 // ── Join flow
+var _joinTimer=null;
+function joinCancel(){
+  if(_joinTimer){ clearTimeout(_joinTimer); _joinTimer=null; }
+  document.getElementById('join-screen').classList.remove('show');
+  document.getElementById('join-spinner').style.display='none';
+  document.getElementById('join-title').textContent='Cancelado';
+  document.getElementById('join-cancel-btn').style.display='none';
+}
 (function(){
   const p=new URLSearchParams(location.search);
   const joinIp=p.get('join');
@@ -301,10 +321,25 @@ let currentFilter='all';
     const sc=document.getElementById('join-screen');
     sc.classList.add('show');
     document.getElementById('join-host-text').textContent='Servidor: '+joinIp+':8766';
+    document.getElementById('join-cancel-btn').style.display='block';
     if(/^100\./.test(joinIp)) {
       document.getElementById('join-ts-notice').style.display='block';
     }
-    setTimeout(function(){ location.href='http://'+joinIp+':8766'; },2000);
+    // Redirect after 4s (up from 2s) so user can read the Tailscale notice
+    _joinTimer=setTimeout(function(){
+      document.getElementById('join-host-text').textContent='A abrir servidor do host...';
+      document.getElementById('join-cancel-btn').style.display='none';
+      location.href='http://'+joinIp+':8766';
+    },4000);
+    // After 30s if still on this page (redirect timed out), show error
+    setTimeout(function(){
+      if(document.getElementById('join-screen').classList.contains('show')){
+        document.getElementById('join-spinner').style.display='none';
+        document.getElementById('join-title').textContent='SERVIDOR INACESSÍVEL';
+        document.getElementById('join-error-ip').textContent=joinIp;
+        document.getElementById('join-error-notice').style.display='block';
+      }
+    },30000);
   }
   const myIp=p.get('myip');
   if(myIp){
@@ -349,7 +384,20 @@ document.getElementById('btn-confirm').addEventListener('click',function(){
   const sc=document.getElementById('join-screen');
   sc.classList.add('show');
   document.getElementById('join-host-text').textContent='Servidor: '+ip+':8766';
-  setTimeout(function(){ location.href='http://'+ip+':8766'; },1200);
+  document.getElementById('join-cancel-btn').style.display='block';
+  if(/^100\./.test(ip)) document.getElementById('join-ts-notice').style.display='block';
+  _joinTimer=setTimeout(function(){
+    document.getElementById('join-cancel-btn').style.display='none';
+    location.href='http://'+ip+':8766';
+  },4000);
+  setTimeout(function(){
+    if(sc.classList.contains('show')){
+      document.getElementById('join-spinner').style.display='none';
+      document.getElementById('join-title').textContent='SERVIDOR INACESSÍVEL';
+      document.getElementById('join-error-ip').textContent=ip;
+      document.getElementById('join-error-notice').style.display='block';
+    }
+  },30000);
 });
 
 document.getElementById('modal-ip').addEventListener('keydown',function(e){

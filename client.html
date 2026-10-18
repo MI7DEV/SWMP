@@ -223,7 +223,7 @@ input[type=text]::placeholder { color: var(--gray); font-size: .82rem; font-fami
     </div>
 
   </div>
-  <div class="footer">Zero Company MP v0.1 · Requer UE4SS instalado no jogo</div>
+  <div class="footer">Zero Company MP · Precisas de estar na rede Tailscale do host para ligar pela internet</div>
 </div>
 
 <script>
@@ -261,6 +261,8 @@ function getHostIp() {
   return document.getElementById('ip-input').value.trim().replace(/^https?:\/\//, '').split(':')[0];
 }
 
+let _connTimeout = null;
+
 function doConnect() {
   const ip = getHostIp();
   if (!ip) { log('Coloca o IP do host primeiro!', 'red'); return; }
@@ -270,14 +272,37 @@ function doConnect() {
   setStatus('Conectando…', `ws://${ip}:${RELAY_PORT}`, 'connecting');
   log(`Ligando a ${ip}:${RELAY_PORT}…`, 'blue');
 
+  // Timeout de 12s — WebSocket pode pendurar se IP inacessível
+  if (_connTimeout) clearTimeout(_connTimeout);
+  _connTimeout = setTimeout(() => {
+    if (ws && ws.readyState !== WebSocket.OPEN) {
+      ws.close();
+      log(`Timeout (12s) — servidor não respondeu em ${ip}:${RELAY_PORT}`, 'red');
+      log('Verificar:', 'gold');
+      log('  1. O host tem o start.bat a correr?', 'gray');
+      if (/^100\./.test(ip)) {
+        log('  2. Estás na rede Tailscale do host?', 'gold');
+        log('     O host tem de te convidar: login.tailscale.com/admin/users', 'gray');
+        log('  3. Depois de aceitar o convite e ligar o Tailscale, tenta novamente.', 'gray');
+      } else {
+        log('  2. Estão na mesma rede (LAN)?', 'gray');
+        log('  3. O IP ' + ip + ' está correcto?', 'gray');
+      }
+      setStatus('Timeout — sem resposta', 'Verifica as instruções no log', 'error');
+      btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    }
+  }, 12000);
+
   try { ws = new WebSocket(`ws://${ip}:${RELAY_PORT}`); }
   catch (e) {
+    clearTimeout(_connTimeout);
     log('Erro: ' + e.message, 'red');
     btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
     return;
   }
 
   ws.onopen = () => {
+    clearTimeout(_connTimeout);
     ws.send(JSON.stringify({ type: 'HELLO', role: 'client' }));
     log('Socket aberto. Aguardando confirmação…', 'blue');
   };
@@ -312,10 +337,26 @@ function doConnect() {
   };
 
   ws.onerror = () => {
+    clearTimeout(_connTimeout);
     log(`Falha a ligar a ${ip}:${RELAY_PORT}`, 'red');
-    log('O server.py do host está a correr? Estão na mesma rede?', 'gold');
-    setStatus('Falha na ligação', 'Verifica o IP e tenta novamente', 'error');
+    if (/^100\./.test(ip)) {
+      log('IP Tailscale detectado. Verifica:', 'gold');
+      log('  • O host tem start.bat a correr?', 'gray');
+      log('  • Estás na rede Tailscale do host?', 'gold');
+      log('    O host convida-te em: login.tailscale.com/admin/users', 'gray');
+    } else {
+      log('O server.py do host está a correr? Estão na mesma rede?', 'gold');
+    }
+    setStatus('Falha na ligação', 'Verifica o log para instruções', 'error');
     btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+  };
+
+  ws.onclose = (e) => {
+    clearTimeout(_connTimeout);
+    if (e.code !== 1000 && btn.disabled) {
+      log(`Ligação encerrada (código ${e.code})`, 'red');
+      btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    }
   };
 }
 
