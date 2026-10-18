@@ -1,8 +1,12 @@
 {
   "version": 2,
+  "functions": {
+    "api/nexus.js": { "memory": 128, "maxDuration": 10 }
+  },
   "routes": [
-    { "src": "/client", "dest": "/client.html" },
-    { "src": "/host",   "dest": "/host.html"   },
-    { "src": "/(.*)",   "dest": "/$1"           }
+    { "src": "/api/nexus", "dest": "/api/nexus.js" },
+    { "src": "/client",   "dest": "/client.html"  },
+    { "src": "/host",     "dest": "/host.html"    },
+    { "src": "/(.*)",     "dest": "/$1"           }
   ]
 }

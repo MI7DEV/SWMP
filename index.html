@@ -1,595 +1,491 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SWMP — Star Wars Zero Company Multiplayer</title>
-<meta name="description" content="Sistema de multijogador local para Star Wars Zero Company. Co-op para 2 jogadores com gestão de mods integrada.">
+<!doctype html>
+<title>SWMP — Star Wars Zero Company Mods</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#02050f;
-  --bg2:#050c1a;
-  --bg3:#090f20;
-  --gold:#f5c842;
-  --gold2:#c9942a;
-  --blue:#1a7fff;
-  --blue2:#4dabff;
-  --red:#e84040;
-  --green:#27c96b;
-  --gray:#60718a;
-  --fg:#d4ddef;
-  --fg2:#8898b8;
-  color-scheme:dark;
+:root {
+  --bg: #07090f;
+  --bg2: #0d1117;
+  --bg3: #111827;
+  --fg: #e2e8f0;
+  --fg2: #94a3b8;
+  --gold: #f5c518;
+  --gold2: #d4a017;
+  --blue: #3b82f6;
+  --green: #22c55e;
+  --red: #ef4444;
+  --border: rgba(245,197,24,0.18);
+  --card-bg: rgba(17,24,39,0.85);
+  color-scheme: dark;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
 body{
-  background:var(--bg);
-  color:var(--fg);
-  font-family:"Rajdhani",system-ui,sans-serif;
-  font-size:16px;
-  overflow-x:hidden;
+  background:var(--bg);color:var(--fg);
+  font-family:'Exo 2',system-ui,sans-serif;font-size:15px;
+  min-height:100dvh;overflow-x:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:env(safe-area-inset-top,0px) env(safe-area-inset-bottom,0px);
 }
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.star{position:absolute;border-radius:50%;background:#fff;animation:twinkle var(--d,3s) infinite alternate}
+@keyframes twinkle{from{opacity:.1}to{opacity:.8}}
 
-/* ─── Stars ─── */
-.stars{position:fixed;inset:0;pointer-events:none;z-index:0}
-.stars canvas{display:block;width:100%;height:100%}
+header{
+  position:relative;z-index:10;
+  padding:18px 0 14px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.logo-icon{font-size:28px;line-height:1}
+.logo-text{
+  font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(15px,3vw,22px);
+  letter-spacing:.12em;color:var(--gold);text-shadow:0 0 20px rgba(245,197,24,.35);
+  text-transform:uppercase;
+}
+.logo-sub{font-size:10px;letter-spacing:.2em;color:var(--fg2);text-transform:uppercase;margin-top:2px}
+.conn-dot{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.08em;color:var(--fg2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--fg2);transition:background .4s}
+.dot.green{background:var(--green)}.dot.red{background:var(--red)}.dot.pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-/* ─── Scanlines overlay ─── */
-body::after{
-  content:"";
-  position:fixed;inset:0;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
-  pointer-events:none;z-index:1;
-}
+main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margin:0 auto}
 
-/* ─── NAV ─── */
-nav{
-  position:fixed;top:0;left:0;right:0;z-index:100;
-  background:rgba(2,5,15,.85);
-  backdrop-filter:blur(12px);
-  border-bottom:1px solid rgba(245,200,66,.15);
-  padding:0 max(20px,4vw);
-  display:flex;align-items:center;gap:16px;height:58px;
+.action-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.action-btn{
+  flex:1;min-width:220px;padding:22px 28px;
+  border:2px solid var(--border);border-radius:8px;
+  background:var(--card-bg);backdrop-filter:blur(8px);
+  font-family:'Orbitron',sans-serif;font-size:clamp(12px,2vw,16px);
+  font-weight:700;letter-spacing:.1em;color:var(--fg);
+  cursor:pointer;text-align:left;
+  transition:border-color .2s,background .2s,transform .1s;
+  display:flex;flex-direction:column;gap:6px;
 }
-.nav-logo{
-  font-family:"Orbitron",sans-serif;
-  font-size:1rem;font-weight:900;
-  color:var(--gold);letter-spacing:.12em;
-  text-decoration:none;
-}
-.nav-logo span{color:var(--fg2);font-weight:400}
-.nav-links{display:flex;gap:6px;margin-left:auto}
-.nav-link{
-  font-size:.8rem;letter-spacing:.08em;font-weight:600;
-  color:var(--fg2);text-decoration:none;
-  padding:6px 14px;border-radius:4px;
-  transition:color .2s,background .2s;
-}
-.nav-link:hover{color:var(--gold);background:rgba(245,200,66,.07)}
-.nav-cta{
-  background:var(--gold);color:#000;
-  font-family:"Orbitron",sans-serif;font-size:.72rem;
-  font-weight:700;letter-spacing:.06em;
-  padding:8px 18px;border-radius:4px;
-  text-decoration:none;
-  transition:background .2s,transform .1s;
-}
-.nav-cta:hover{background:#e6b82e;transform:scale(1.03)}
+.action-btn:hover{border-color:var(--gold);background:rgba(245,197,24,.06);transform:translateY(-2px)}
+.action-btn:active{transform:translateY(0)}
+.action-btn.primary{border-color:rgba(245,197,24,.5)}
+.btn-icon{font-size:26px;margin-bottom:4px}
+.btn-label{color:var(--gold);font-size:clamp(14px,2.2vw,18px)}
+.btn-desc{color:var(--fg2);font-family:'Exo 2',sans-serif;font-weight:300;font-size:12px;letter-spacing:.04em}
 
-/* ─── HERO ─── */
-.hero{
-  position:relative;z-index:2;
-  min-height:100vh;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  text-align:center;
-  padding:100px max(20px,4vw) 60px;
+#share-panel{
+  background:var(--card-bg);border:1px solid var(--border);border-radius:8px;
+  padding:16px 20px;margin-bottom:20px;display:none;
 }
-.crawl-wrapper{
-  width:min(520px,90vw);
-  background:linear-gradient(160deg,rgba(245,200,66,.05),transparent);
-  border:1px solid rgba(245,200,66,.12);
-  border-radius:8px;
-  padding:28px 32px;
-  margin-bottom:48px;
-  font-size:.82rem;color:var(--gold2);
-  font-style:italic;line-height:1.8;letter-spacing:.04em;
-  text-align:justify;
+#share-panel h3{font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:.15em;color:var(--gold);margin-bottom:12px;text-transform:uppercase}
+.share-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.share-row input{
+  flex:1;min-width:200px;background:rgba(0,0,0,.4);
+  border:1px solid var(--border);border-radius:6px;
+  padding:10px 14px;color:var(--fg);font-family:monospace;font-size:13px;outline:none;
 }
-.empire-divider{
-  width:80px;height:2px;
-  background:linear-gradient(90deg,transparent,var(--gold),transparent);
-  margin:0 auto 32px;
+.ip-input{max-width:180px!important;min-width:120px!important}
+.copy-btn{
+  padding:10px 18px;background:rgba(245,197,24,.12);border:1px solid var(--gold2);
+  border-radius:6px;color:var(--gold);font-family:'Orbitron',sans-serif;font-size:11px;
+  letter-spacing:.08em;cursor:pointer;white-space:nowrap;transition:background .2s;
 }
-.hero-badge{
-  font-family:"Orbitron",sans-serif;
-  font-size:.7rem;letter-spacing:.25em;font-weight:600;
-  color:var(--blue2);margin-bottom:16px;
-}
-.hero-title{
-  font-family:"Orbitron",sans-serif;
-  font-size:clamp(2rem,6vw,3.8rem);
-  font-weight:900;line-height:1.05;
-  color:var(--gold);
-  text-shadow:0 0 60px rgba(245,200,66,.4),0 0 120px rgba(245,200,66,.15);
-  margin-bottom:10px;letter-spacing:.04em;
-}
-.hero-sub{
-  font-family:"Orbitron",sans-serif;
-  font-size:clamp(.85rem,2vw,1.1rem);
-  font-weight:600;color:var(--fg2);
-  letter-spacing:.18em;margin-bottom:24px;
-}
-.hero-desc{
-  max-width:540px;margin:0 auto 40px;
-  font-size:1.1rem;color:var(--fg);line-height:1.7;
-  font-weight:500;
-}
-.hero-buttons{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
-.btn-hero{
-  font-family:"Orbitron",sans-serif;
-  font-size:.78rem;font-weight:700;
-  letter-spacing:.08em;
-  padding:14px 32px;border-radius:5px;
-  text-decoration:none;border:none;cursor:pointer;
-  transition:all .2s;display:inline-flex;align-items:center;gap:8px;
-}
-.btn-primary{background:var(--gold);color:#000}
-.btn-primary:hover{background:#e6b82e;transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,200,66,.35)}
-.btn-secondary{
-  background:transparent;color:var(--fg);
-  border:1px solid rgba(245,200,66,.3);
-}
-.btn-secondary:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.copy-btn:hover{background:rgba(245,197,24,.22)}
+.share-hint{margin-top:10px;font-size:12px;color:var(--fg2)}
 
-/* ─── SABER LINE ─── */
-.saber-line{
-  width:100%;max-width:700px;margin:48px auto;
-  height:1px;
-  background:linear-gradient(90deg,transparent,rgba(77,171,255,.5),var(--blue2),rgba(77,171,255,.5),transparent);
-  position:relative;z-index:2;
+#status-panel{
+  background:var(--card-bg);border:1px solid var(--border);border-radius:8px;
+  padding:16px 20px;margin-bottom:20px;
 }
+#status-panel h3{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.15em;color:var(--gold);margin-bottom:12px;text-transform:uppercase}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+.stat-card{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:6px;padding:10px 14px}
+.stat-label{font-size:10px;letter-spacing:.1em;color:var(--fg2);text-transform:uppercase;margin-bottom:4px}
+.stat-value{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--fg)}
+.stat-value.ok{color:var(--green)}.stat-value.bad{color:var(--red)}.stat-value.gold{color:var(--gold)}
+.install-log{
+  background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06);border-radius:6px;
+  padding:10px 14px;font-family:monospace;font-size:11px;line-height:1.6;
+  max-height:90px;overflow-y:auto;
+}
+.install-log .lg{color:var(--fg2)}.install-log .gn{color:var(--green)}
+.install-log .rd{color:var(--red)}.install-log .bl{color:var(--blue)}.install-log .gl{color:var(--gold)}
 
-/* ─── FEATURES ─── */
-.section{
-  position:relative;z-index:2;
-  padding:80px max(20px,4vw);
-  max-width:1100px;margin:0 auto;
+#mods-section h2{
+  font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);
+  letter-spacing:.12em;color:var(--gold);text-transform:uppercase;
+  margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
-.section-label{
-  font-family:"Orbitron",sans-serif;
-  font-size:.68rem;letter-spacing:.3em;color:var(--blue2);
-  text-align:center;margin-bottom:12px;
+#mods-section h2 .count{font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px}
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.filter-btn{
+  padding:6px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:20px;color:var(--fg2);font-family:'Exo 2',sans-serif;font-size:12px;cursor:pointer;transition:all .15s;
 }
-.section-title{
-  font-family:"Orbitron",sans-serif;
-  font-size:clamp(1.4rem,3.5vw,2.2rem);
-  font-weight:700;text-align:center;color:var(--gold);
-  margin-bottom:8px;letter-spacing:.04em;
+.filter-btn.active,.filter-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,24,.08)}
+#mods-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.mod-card{
+  background:var(--card-bg);border:1px solid var(--border);border-radius:8px;
+  overflow:hidden;display:flex;flex-direction:column;transition:border-color .2s,transform .15s;
 }
-.section-sub{
-  text-align:center;color:var(--fg2);
-  font-size:1rem;margin-bottom:48px;
-  max-width:560px;margin-left:auto;margin-right:auto;
+.mod-card:hover{border-color:rgba(245,197,24,.45);transform:translateY(-2px)}
+.mod-thumb{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#111}
+.mod-thumb-ph{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,#0a0f1a 0%,#151e2e 100%);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--border)}
+.mod-body{padding:12px 14px;flex:1;display:flex;flex-direction:column;gap:6px}
+.mod-name{font-weight:600;font-size:13px;line-height:1.3;min-width:0}
+.mod-meta{display:flex;gap:10px;font-size:11px;color:var(--fg2);flex-wrap:wrap}
+.mod-desc{font-size:11px;color:var(--fg2);line-height:1.5;flex:1;min-width:0}
+.mod-footer{padding:10px 14px;border-top:1px solid rgba(255,255,255,.05);display:flex;gap:8px;align-items:center}
+.install-btn{
+  flex:1;padding:8px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.4);
+  border-radius:5px;color:var(--gold);font-family:'Orbitron',sans-serif;font-size:10px;
+  letter-spacing:.06em;cursor:pointer;transition:background .15s;
 }
+.install-btn:hover{background:rgba(245,197,24,.2)}
+.install-btn:disabled{opacity:.4;cursor:default}
+.install-btn.installed{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.4);color:var(--green)}
+.nexus-link{padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:var(--fg2);font-size:12px;text-decoration:none;transition:color .15s}
+.nexus-link:hover{color:var(--fg)}
+.installed-badge{font-size:10px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:2px 6px;font-family:'Orbitron',sans-serif;letter-spacing:.05em}
 
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-.feat{
-  background:var(--bg2);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:8px;padding:28px 24px;
-  transition:border-color .2s,transform .2s;
-}
-.feat:hover{border-color:rgba(245,200,66,.25);transform:translateY(-3px)}
-.feat-icon{font-size:2rem;margin-bottom:14px}
-.feat-title{
-  font-family:"Orbitron",sans-serif;
-  font-size:.85rem;font-weight:700;
-  color:var(--fg);letter-spacing:.05em;margin-bottom:8px;
-}
-.feat-desc{font-size:.92rem;color:var(--fg2);line-height:1.6}
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+#modal-overlay.open{display:flex}
+.modal{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:420px;width:100%}
+.modal h2{font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:.12em;color:var(--gold);margin-bottom:20px;text-transform:uppercase}
+.modal label{display:block;font-size:12px;color:var(--fg2);margin-bottom:6px}
+.modal input[type=text]{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:6px;padding:12px 14px;color:var(--fg);font-family:monospace;font-size:14px;outline:none;margin-bottom:18px}
+.modal input[type=text]:focus{border-color:var(--gold)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end}
+.modal-btns button{padding:10px 20px;border-radius:6px;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.08em;cursor:pointer;transition:background .15s}
+.btn-cancel{background:transparent;border:1px solid var(--border);color:var(--fg2)}
+.btn-cancel:hover{border-color:var(--fg2)}
+.btn-confirm{background:rgba(245,197,24,.15);border:1px solid var(--gold2);color:var(--gold)}
+.btn-confirm:hover{background:rgba(245,197,24,.25)}
 
-/* ─── HOW IT WORKS ─── */
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;position:relative}
-.steps::before{
-  content:"";position:absolute;top:28px;left:10%;right:10%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(245,200,66,.2),rgba(245,200,66,.4),rgba(245,200,66,.2),transparent);
-}
-.step{padding:24px;text-align:center;position:relative}
-.step-num{
-  width:56px;height:56px;border-radius:50%;
-  border:2px solid var(--gold);
-  background:var(--bg);
-  display:flex;align-items:center;justify-content:center;
-  font-family:"Orbitron",sans-serif;font-size:1.1rem;font-weight:900;
-  color:var(--gold);margin:0 auto 16px;
-  position:relative;z-index:1;
-  box-shadow:0 0 20px rgba(245,200,66,.25);
-}
-.step-title{font-family:"Orbitron",sans-serif;font-size:.78rem;font-weight:700;color:var(--fg);letter-spacing:.06em;margin-bottom:8px}
-.step-desc{font-size:.88rem;color:var(--fg2);line-height:1.5}
+#join-screen{display:none;position:fixed;inset:0;z-index:200;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:24px;text-align:center}
+#join-screen.show{display:flex}
+.join-spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.join-title{font-family:'Orbitron',sans-serif;font-size:clamp(16px,3vw,22px);letter-spacing:.1em;color:var(--gold)}
+.join-sub{color:var(--fg2);font-size:13px}
 
-/* ─── DOWNLOAD CARD ─── */
-.download-section{
-  position:relative;z-index:2;
-  padding:0 max(20px,4vw) 100px;
-}
-.download-card{
-  max-width:760px;margin:0 auto;
-  background:linear-gradient(135deg,rgba(245,200,66,.06),rgba(26,127,255,.04));
-  border:1px solid rgba(245,200,66,.2);
-  border-radius:12px;
-  padding:48px;text-align:center;
-}
-.download-card h2{
-  font-family:"Orbitron",sans-serif;
-  font-size:1.6rem;font-weight:700;
-  color:var(--gold);margin-bottom:12px;letter-spacing:.06em;
-}
-.download-card p{color:var(--fg2);margin-bottom:32px;font-size:1rem;line-height:1.6}
-.download-files{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px;text-align:left}
-.dl-file{
-  background:var(--bg3);border:1px solid rgba(255,255,255,.06);
-  border-radius:6px;padding:14px 16px;
-  display:flex;align-items:center;gap:12px;
-}
-.dl-icon{font-size:1.4rem}
-.dl-name{font-family:"Orbitron",sans-serif;font-size:.72rem;font-weight:600;color:var(--fg);letter-spacing:.04em}
-.dl-desc{font-size:.78rem;color:var(--fg2);margin-top:2px}
-.requirements{
-  background:var(--bg3);border-radius:6px;padding:16px;
-  font-size:.82rem;color:var(--fg2);line-height:1.7;text-align:left;
-}
-.requirements strong{color:var(--gold);font-family:"Orbitron",sans-serif;font-size:.72rem;letter-spacing:.06em}
-
-/* ─── JOIN SECTION ─── */
-.join-section{
-  position:relative;z-index:2;
-  background:var(--bg2);
-  border-top:1px solid rgba(245,200,66,.1);
-  border-bottom:1px solid rgba(245,200,66,.1);
-  padding:80px max(20px,4vw);
-}
-.join-card{
-  max-width:480px;margin:0 auto;
-  background:var(--bg3);
-  border:1px solid rgba(26,127,255,.2);
-  border-radius:12px;overflow:hidden;
-}
-.join-hd{
-  background:linear-gradient(135deg,#050c1a,#0a1428);
-  padding:20px 24px;
-  border-bottom:1px solid rgba(26,127,255,.15);
-  text-align:center;
-}
-.join-hd h3{
-  font-family:"Orbitron",sans-serif;
-  font-size:.88rem;font-weight:700;color:var(--blue2);
-  letter-spacing:.1em;
-}
-.join-bd{padding:24px}
-.field-lbl{
-  font-size:.72rem;color:var(--gray);
-  letter-spacing:.08em;margin-bottom:6px;
-  font-family:"Orbitron",sans-serif;font-weight:600;
-}
-input[type=text]{
-  width:100%;background:var(--bg2);
-  border:1px solid rgba(26,127,255,.2);
-  border-radius:5px;color:var(--gold);
-  font-size:1rem;font-family:"Consolas",monospace;
-  padding:11px 14px;outline:none;
-  transition:border-color .2s;margin-bottom:14px;
-}
-input[type=text]:focus{border-color:var(--blue)}
-input::placeholder{color:var(--gray);font-size:.82rem}
-.btn-connect{
-  width:100%;padding:13px;border:none;
-  border-radius:5px;cursor:pointer;
-  font-family:"Orbitron",sans-serif;font-size:.8rem;
-  font-weight:700;letter-spacing:.06em;
-  background:var(--blue);color:#fff;
-  transition:background .2s,transform .1s;
-}
-.btn-connect:hover{background:#1a8fff;transform:scale(1.01)}
-.join-note{
-  font-size:.78rem;color:var(--gray);
-  text-align:center;margin-top:12px;line-height:1.5;
-}
-.join-note a{color:var(--blue2);text-decoration:none}
-.join-status{
-  display:none;text-align:center;padding:12px;
-  border-radius:5px;margin-top:12px;
-  font-size:.85rem;font-weight:600;
-}
-.join-status.ok{background:#0e2d1a;color:var(--green);border:1px solid #1a4d2a}
-.join-status.err{background:#2a0e0e;color:var(--red);border:1px solid #4a1a1a}
-
-/* ─── FOOTER ─── */
-footer{
-  position:relative;z-index:2;
-  padding:32px max(20px,4vw);
-  border-top:1px solid rgba(245,200,66,.08);
-  text-align:center;
-}
-.footer-logo{
-  font-family:"Orbitron",sans-serif;
-  font-size:.85rem;font-weight:900;color:var(--gold);
-  letter-spacing:.12em;margin-bottom:8px;
-}
-.footer-sub{font-size:.78rem;color:var(--gray);line-height:1.6}
-.footer-sub a{color:var(--fg2);text-decoration:none}
-.footer-sub a:hover{color:var(--gold)}
-
-@media(max-width:600px){
-  .download-files{grid-template-columns:1fr}
-  .steps::before{display:none}
-  .hero-title{font-size:1.9rem}
-}
+#loading{text-align:center;padding:40px;color:var(--fg2)}
+.spinner{display:inline-block;width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
 </style>
-</head>
-<body>
 
-<div class="stars"><canvas id="starfield"></canvas></div>
+<div class="stars" id="stars"></div>
 
-<!-- NAV -->
-<nav>
-  <a class="nav-logo" href="/">SWMP <span>// ZERO COMPANY</span></a>
-  <div class="nav-links">
-    <a class="nav-link" href="#features">Features</a>
-    <a class="nav-link" href="#como-funciona">Como Funciona</a>
-    <a class="nav-link" href="#download">Download</a>
-    <a class="nav-cta" href="#join">⚔ Juntar ao Jogo</a>
-  </div>
-</nav>
+<div id="join-screen">
+  <div class="join-spinner"></div>
+  <div class="join-title">LIGANDO AO SERVIDOR</div>
+  <div class="join-sub" id="join-host-text"></div>
+</div>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="crawl-wrapper">
-    "Numa galáxia muito, muito distante… a aliança da camaradagem
-    encontrou uma forma de lutar lado a lado — através das fronteiras
-    do éter digital. Dois comandantes. Uma missão. O Império não sabe
-    o que está por vir."
-  </div>
-  <div class="empire-divider"></div>
-  <div class="hero-badge">— SISTEMA DE MULTIJOGADOR —</div>
-  <h1 class="hero-title">STAR WARS<br>ZERO COMPANY</h1>
-  <p class="hero-sub">MULTIPLAYER PROTOCOL · v0.2</p>
-  <p class="hero-desc">
-    Co-op local para 2 jogadores com sincronização de turnos,
-    divisão automática de unidades e gestão integrada de mods via Nexus.
-  </p>
-  <div class="hero-buttons">
-    <a class="btn-hero btn-primary" href="#download">⬇ Descarregar</a>
-    <a class="btn-hero btn-secondary" href="#join">⚔ Juntar ao Jogo</a>
-    <a class="btn-hero btn-secondary" href="https://github.com/MI7DEV/SWMP" target="_blank">⚙ GitHub</a>
-  </div>
-</section>
-
-<div class="saber-line"></div>
-
-<!-- FEATURES -->
-<section class="section" id="features">
-  <div class="section-label">CAPACIDADES DO SISTEMA</div>
-  <h2 class="section-title">O que o SWMP oferece</h2>
-  <p class="section-sub">Engenharia reversa ao serviço da Aliança — multijogador onde nunca existiu.</p>
-  <div class="features">
-    <div class="feat">
-      <div class="feat-icon">⚔</div>
-      <div class="feat-title">Divisão de Unidades</div>
-      <div class="feat-desc">Host controla metade do esquadrão, cliente a outra metade. Sincronização automática de turnos em tempo real.</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🔄</div>
-      <div class="feat-title">Relay WebSocket</div>
-      <div class="feat-desc">Servidor Python local com relay persistente. Latência mínima para jogar em rede local (LAN) ou internet.</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🎮</div>
-      <div class="feat-title">Gestor de Mods</div>
-      <div class="feat-desc">Integração com Nexus Mods — navega os 30 mais endorsados, instala e sincroniza entre os dois jogadores automaticamente.</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🔍</div>
-      <div class="feat-title">Explorer de Classes</div>
-      <div class="feat-desc">Captura as classes internas do UE5 via UE4SS para mapeamento preciso das unidades e sincronização de ações.</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">⚡</div>
-      <div class="feat-title">Auto-Setup</div>
-      <div class="feat-desc">Um clique no start.bat instala tudo — Python, WebSockets, UE4SS, mod Lua — e abre o painel de controlo.</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🛡</div>
-      <div class="feat-title">Watchdog Automático</div>
-      <div class="feat-desc">O servidor reinicia automaticamente se cair. API key do Nexus guardada localmente em config.json.</div>
+<div id="modal-overlay">
+  <div class="modal">
+    <h2>Entrar como Cliente</h2>
+    <label>IP do servidor (fornecido pelo host)</label>
+    <input type="text" id="modal-ip" placeholder="192.168.1.100" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btn-cancel">Cancelar</button>
+      <button class="btn-confirm" id="btn-confirm">Conectar</button>
     </div>
   </div>
-</section>
+</div>
 
-<!-- HOW IT WORKS -->
-<section class="section" id="como-funciona">
-  <div class="section-label">PROTOCOLO DE ACTIVAÇÃO</div>
-  <h2 class="section-title">Como Funciona</h2>
-  <p class="section-sub">Três passos para comandar o esquadrão com o teu aliado.</p>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">01</div>
-      <div class="step-title">Host Inicia</div>
-      <div class="step-desc">Executa start.bat. O servidor arranca e o painel do host abre no browser.</div>
-    </div>
-    <div class="step">
-      <div class="step-num">02</div>
-      <div class="step-title">Amigo Conecta</div>
-      <div class="step-desc">Acede ao link do host ou usa a página "Juntar ao Jogo" com o IP fornecido.</div>
-    </div>
-    <div class="step">
-      <div class="step-num">03</div>
-      <div class="step-title">Explorar & Jogar</div>
-      <div class="step-desc">Com o jogo aberto numa missão, clica "Explorar Jogo" para sincronizar e dividir as unidades.</div>
-    </div>
-    <div class="step">
-      <div class="step-num">04</div>
-      <div class="step-title">Mods Opcionais</div>
-      <div class="step-desc">Navega os top 30 mods do Nexus, instala os que quiser — ambos ficam sincronizados automaticamente.</div>
-    </div>
+<header>
+  <div class="logo-icon">⚔</div>
+  <div>
+    <div class="logo-text">SWMP — Mod Portal</div>
+    <div class="logo-sub">Star Wars Zero Company</div>
   </div>
-</section>
+  <div class="conn-dot">
+    <div class="dot" id="srv-dot"></div>
+    <span id="srv-label">Servidor</span>
+  </div>
+</header>
 
-<!-- JOIN SECTION -->
-<section class="join-section" id="join">
-  <div class="section-label">PAINEL DO CLIENTE</div>
-  <h2 class="section-title">Juntar ao Jogo</h2>
-  <p class="section-sub" style="margin-bottom:32px">O host já iniciou o servidor? Cola o IP e conecta.</p>
-  <div class="join-card">
-    <div class="join-hd">
-      <h3>⚔ LIGAÇÃO AO HOST</h3>
-    </div>
-    <div class="join-bd">
-      <div class="field-lbl">IP DO HOST</div>
-      <input type="text" id="host-ip" placeholder="ex: 192.168.1.100" autocomplete="off">
-      <button class="btn-connect" onclick="joinGame()">CONECTAR AO JOGO</button>
-      <div id="join-status" class="join-status"></div>
-      <p class="join-note">
-        O host partilha o IP visível no seu painel.<br>
-        A ligação vai para <strong style="color:var(--blue2)">ws://[IP]:8765</strong><br>
-        <a href="#download">Não tens o servidor instalado?</a>
-      </p>
-    </div>
+<main>
+  <div class="action-row">
+    <button class="action-btn primary" id="btn-host">
+      <div class="btn-icon">🎮</div>
+      <div class="btn-label">HOSTEAR</div>
+      <div class="btn-desc">Abre o painel do host e gera link para convidar amigos</div>
+    </button>
+    <button class="action-btn" id="btn-client">
+      <div class="btn-icon">👥</div>
+      <div class="btn-label">ENTRAR COMO CLIENTE</div>
+      <div class="btn-desc">Conecta ao servidor de um amigo via IP ou link de convite</div>
+    </button>
   </div>
-</section>
 
-<!-- DOWNLOAD -->
-<section class="download-section" style="padding-top:80px" id="download">
-  <div class="download-card">
-    <h2>⬇ DESCARREGAR SWMP</h2>
-    <p>Todos os ficheiros necessários para o host iniciar o servidor de multijogador.</p>
-    <div class="download-files">
-      <div class="dl-file">
-        <div class="dl-icon">🐍</div>
-        <div>
-          <div class="dl-name">server.py</div>
-          <div class="dl-desc">Servidor WebSocket + HTTP relay</div>
-        </div>
-      </div>
-      <div class="dl-file">
-        <div class="dl-icon">🖥</div>
-        <div>
-          <div class="dl-name">host.html</div>
-          <div class="dl-desc">Painel de controlo do host</div>
-        </div>
-      </div>
-      <div class="dl-file">
-        <div class="dl-icon">👾</div>
-        <div>
-          <div class="dl-name">start.bat</div>
-          <div class="dl-desc">Launcher automático (Windows)</div>
-        </div>
-      </div>
-      <div class="dl-file">
-        <div class="dl-icon">🎮</div>
-        <div>
-          <div class="dl-name">ZeroCompanyMP.lua</div>
-          <div class="dl-desc">Mod UE4SS para sincronização</div>
-        </div>
-      </div>
+  <div id="share-panel">
+    <h3>Link de Convite</h3>
+    <div class="share-row" style="margin-bottom:8px">
+      <span style="font-size:12px;color:var(--fg2)">Seu IP local:</span>
+      <input type="text" id="my-ip-input" class="ip-input" placeholder="192.168.1.100" style="max-width:180px;flex:none">
+      <button class="copy-btn" id="btn-gen-link">Gerar Link</button>
     </div>
-    <a class="btn-hero btn-primary" href="https://github.com/MI7DEV/SWMP" target="_blank" style="display:inline-flex;margin:0 auto">⚙ Ver no GitHub</a>
-    <div class="requirements" style="margin-top:24px">
-      <strong>REQUISITOS</strong><br>
-      Python 3.10+ &nbsp;·&nbsp; Star Wars Zero Company (Steam/EA) &nbsp;·&nbsp;
-      UE4SS v3.x &nbsp;·&nbsp; Windows 10/11 &nbsp;·&nbsp;
-      Conta Nexus Mods (gratuita) para gestão de mods
+    <div class="share-row" id="link-row" style="display:none">
+      <input type="text" id="share-link-input" readonly>
+      <button class="copy-btn" id="btn-copy-link">Copiar</button>
     </div>
+    <div class="share-hint">Envie este link para o seu amigo — ele clica e conecta automaticamente.</div>
   </div>
-</section>
 
-<!-- FOOTER -->
-<footer>
-  <div class="footer-logo">SWMP // ZERO COMPANY</div>
-  <div class="footer-sub">
-    Projeto de engenharia reversa por <a href="https://github.com/MI7DEV">MI7DEV</a><br>
-    Star Wars Zero Company © Electronic Arts · Este projeto não é afiliado à EA ou Lucasfilm.<br>
-    <a href="https://github.com/MI7DEV/SWMP">GitHub</a> ·
-    <a href="https://www.nexusmods.com/starwarszerocompany" target="_blank">Nexus Mods</a>
+  <div id="status-panel">
+    <h3>Estado do Servidor Local</h3>
+    <div class="status-grid">
+      <div class="stat-card"><div class="stat-label">Servidor</div><div class="stat-value" id="stat-server">—</div></div>
+      <div class="stat-card"><div class="stat-label">Jogo</div><div class="stat-value" id="stat-game">—</div></div>
+      <div class="stat-card"><div class="stat-label">Mods instalados</div><div class="stat-value gold" id="stat-mods">—</div></div>
+      <div class="stat-card"><div class="stat-label">Instalação</div><div class="stat-value" id="stat-install">—</div></div>
+    </div>
+    <div class="install-log" id="install-log"><span class="lg">Aguardando servidor local em localhost:8766...</span></div>
   </div>
-</footer>
+
+  <div id="mods-section">
+    <h2>Mods Disponíveis <span class="count" id="mods-count">A carregar...</span></h2>
+    <div class="filter-row">
+      <button class="filter-btn active" data-filter="all">Todos</button>
+      <button class="filter-btn" data-filter="installed">Instalados</button>
+      <button class="filter-btn" data-filter="not_installed">Não instalados</button>
+    </div>
+    <div id="mods-grid"><div id="loading"><div class="spinner"></div><br>A carregar mods do Nexus...</div></div>
+  </div>
+</main>
 
 <script>
-// ── Stars ──────────────────────────────────────────────────────────────────
-const canvas = document.getElementById('starfield');
-const ctx = canvas.getContext('2d');
-let stars = [];
-function resize(){
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-function initStars(){
-  stars = [];
-  const n = Math.floor(canvas.width * canvas.height / 3000);
-  for(let i=0;i<n;i++){
-    stars.push({
-      x: Math.random()*canvas.width,
-      y: Math.random()*canvas.height,
-      r: Math.random()*1.5 + 0.2,
-      a: Math.random(),
-      da: (Math.random()-.5)*.005
-    });
+// ── Stars
+(function(){
+  const c=document.getElementById('stars');
+  for(let i=0;i<120;i++){
+    const s=document.createElement('div');s.className='star';
+    const sz=(Math.random()*2)+.5;
+    s.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+Math.random()*100+'%;top:'+Math.random()*100+'%;--d:'+(Math.random()*4+2).toFixed(1)+'s';
+    c.appendChild(s);
   }
+})();
+
+const LOCAL='http://localhost:8766';
+let allMods=[];
+let installedMods=new Set();
+let currentFilter='all';
+
+// ── Join flow
+(function(){
+  const p=new URLSearchParams(location.search);
+  const joinIp=p.get('join');
+  if(joinIp){
+    const sc=document.getElementById('join-screen');
+    sc.classList.add('show');
+    document.getElementById('join-host-text').textContent='Servidor: '+joinIp+':8766';
+    setTimeout(function(){ location.href='http://'+joinIp+':8766'; },1200);
+  }
+  const myIp=p.get('myip');
+  if(myIp) document.getElementById('my-ip-input').value=myIp;
+})();
+
+// ── Buttons
+document.getElementById('btn-host').addEventListener('click',function(){
+  const panel=document.getElementById('share-panel');
+  panel.style.display=panel.style.display==='block'?'none':'block';
+  fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2000)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.local_ip&&d.local_ip!=='127.0.0.1'){
+        document.getElementById('my-ip-input').value=d.local_ip;
+        generateLink();
+      }
+      window.open(LOCAL,'swmp_host');
+    })
+    .catch(function(){ window.open(LOCAL,'swmp_host'); });
+});
+
+document.getElementById('btn-client').addEventListener('click',function(){
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(function(){ document.getElementById('modal-ip').focus(); },50);
+});
+
+document.getElementById('btn-cancel').addEventListener('click',function(){
+  document.getElementById('modal-overlay').classList.remove('open');
+});
+
+document.getElementById('btn-confirm').addEventListener('click',function(){
+  const ip=document.getElementById('modal-ip').value.trim();
+  if(!ip){ document.getElementById('modal-ip').focus(); return; }
+  document.getElementById('modal-overlay').classList.remove('open');
+  const sc=document.getElementById('join-screen');
+  sc.classList.add('show');
+  document.getElementById('join-host-text').textContent='Servidor: '+ip+':8766';
+  setTimeout(function(){ location.href='http://'+ip+':8766'; },1200);
+});
+
+document.getElementById('modal-ip').addEventListener('keydown',function(e){
+  if(e.key==='Enter') document.getElementById('btn-confirm').click();
+  if(e.key==='Escape') document.getElementById('btn-cancel').click();
+});
+
+// ── Share link
+function generateLink(){
+  var ip=document.getElementById('my-ip-input').value.trim();
+  if(!ip) return;
+  var link=location.origin+'/?join='+ip;
+  document.getElementById('share-link-input').value=link;
+  document.getElementById('link-row').style.display='flex';
 }
-function drawStars(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  stars.forEach(s=>{
-    s.a += s.da;
-    if(s.a<=0||s.a>=1) s.da*=-1;
-    ctx.beginPath();
-    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
-    ctx.fillStyle = `rgba(255,255,230,${s.a})`;
-    ctx.fill();
+document.getElementById('my-ip-input').addEventListener('input',generateLink);
+document.getElementById('btn-gen-link').addEventListener('click',generateLink);
+document.getElementById('btn-copy-link').addEventListener('click',function(){
+  var v=document.getElementById('share-link-input').value;
+  var btn=this;
+  navigator.clipboard.writeText(v).catch(function(){
+    document.getElementById('share-link-input').select();
   });
-  requestAnimationFrame(drawStars);
-}
-window.addEventListener('resize',()=>{ resize(); initStars(); });
-resize(); initStars(); drawStars();
+  btn.textContent='Copiado!';setTimeout(function(){btn.textContent='Copiar';},1800);
+});
 
-// ── Join ───────────────────────────────────────────────────────────────────
-function joinGame(){
-  const ip = document.getElementById('host-ip').value.trim().replace(/^https?:\/\//,'').split(':')[0];
-  const st = document.getElementById('join-status');
-  if(!ip){ showStatus('Cola o IP do host primeiro.','err'); return; }
-  // Tentar abrir client.html no servidor local do host
-  const url = `http://${ip}:8766/client.html`;
-  st.className='join-status ok';
-  st.style.display='block';
-  st.textContent='⟳ A abrir ligação ao host…';
-  window.open(url, '_blank');
-  setTimeout(()=>{
-    st.textContent=`✓ Abriste ${url} — se não carregou, confirma que o host iniciou o start.bat.`;
-  },1500);
-}
-function showStatus(msg, type){
-  const st = document.getElementById('join-status');
-  st.className='join-status '+(type||'err');
-  st.style.display='block';
-  st.textContent=msg;
+// ── Status polling
+var srvDot=document.getElementById('srv-dot');
+var srvLabel=document.getElementById('srv-label');
+
+function setStatVal(id,val,cls){
+  var el=document.getElementById(id);
+  el.textContent=val;
+  el.className='stat-value'+(cls?' '+cls:'');
 }
 
-// ── Nav scroll highlight ───────────────────────────────────────────────────
-const sections = document.querySelectorAll('section[id]');
-const links = document.querySelectorAll('.nav-link');
-const io = new IntersectionObserver(entries=>{
-  entries.forEach(e=>{
-    if(e.isIntersecting){
-      links.forEach(l=>{
-        l.style.color = l.getAttribute('href')==='#'+e.target.id ? 'var(--gold)' : '';
-      });
+function renderLog(log){
+  var el=document.getElementById('install-log');
+  if(!log||!log.length) return;
+  var colorMap={green:'gn',red:'rd',blue:'bl',gold:'gl'};
+  var html='';
+  var slice=log.slice(-8);
+  for(var i=0;i<slice.length;i++){
+    var entry=slice[i];
+    var msg=String(entry[0]||entry.msg||'');
+    var col=String(entry[1]||entry.c||'');
+    var cls=colorMap[col]||'lg';
+    var safe=msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    html+='<div class="'+cls+'">'+safe+'</div>';
+  }
+  el.innerHTML=html;
+  el.scrollTop=el.scrollHeight;
+}
+
+function pollStatus(){
+  fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2500)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      srvDot.className='dot green';srvLabel.textContent='Online';
+      setStatVal('stat-server','Online','ok');
+      var gf=d.game_found,gr=d.game_running;
+      setStatVal('stat-game',gf?(gr?'Rodando':'Encontrado'):'Não encontrado',gf?(gr?'gold':'ok'):'bad');
+      var modsArr=(d.my_mods||[]).concat(d.pak_mods||[]);
+      setStatVal('stat-mods',modsArr.length,'gold');
+      var ist=d.install_status||'';
+      var istMap={done:'Concluída',running:'Em progresso',failed:'Falhou',pending:'Aguardando',not_needed:'OK'};
+      setStatVal('stat-install',istMap[ist]||ist,ist==='done'?'ok':ist==='failed'?'bad':'');
+      installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
+      if(d.install_log) renderLog(d.install_log);
+      if(d.local_ip&&d.local_ip!=='127.0.0.1'){
+        var ipIn=document.getElementById('my-ip-input');
+        if(!ipIn.value) ipIn.value=d.local_ip;
+      }
+      renderGrid();
+    })
+    .catch(function(){
+      srvDot.className='dot red';srvLabel.textContent='Offline';
+      setStatVal('stat-server','Offline','bad');
+      setStatVal('stat-game','—','');setStatVal('stat-mods','—','');setStatVal('stat-install','—','');
+    });
+}
+
+pollStatus();
+setInterval(pollStatus,4000);
+
+// ── Mods browser
+function stripBBCode(s){
+  return (s||'').replace(/\[\/?\w+(?:=[^\]]+)?\]/g,'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+}
+
+fetch('/api/nexus')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    allMods=d.mods||[];
+    document.getElementById('mods-count').textContent=allMods.length+' mods';
+    renderGrid();
+  })
+  .catch(function(){
+    document.getElementById('mods-grid').innerHTML='<div style="color:var(--red);padding:24px">Erro ao carregar mods. Verifique a API.</div>';
+  });
+
+document.querySelectorAll('.filter-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    currentFilter=this.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
+    this.classList.add('active');
+    renderGrid();
+  });
+});
+
+function renderGrid(){
+  var grid=document.getElementById('mods-grid');
+  var mods=allMods.filter(function(m){return m.name&&m.mod_id;});
+  if(currentFilter==='installed') mods=mods.filter(function(m){return installedMods.has(m.name.toLowerCase());});
+  if(currentFilter==='not_installed') mods=mods.filter(function(m){return !installedMods.has(m.name.toLowerCase());});
+  document.getElementById('mods-count').textContent=mods.length+'/'+allMods.length+' mods';
+
+  if(!mods.length&&allMods.length>0){
+    grid.innerHTML='<div style="color:var(--fg2);padding:24px">Nenhum mod encontrado.</div>';
+    return;
+  }
+  if(!mods.length) return;
+
+  grid.innerHTML='';
+  mods.forEach(function(m){
+    var inst=installedMods.has(m.name.toLowerCase());
+    var card=document.createElement('div');
+    card.className='mod-card';
+    var desc=stripBBCode(m.summary||m.description).slice(0,100);
+    var nexusUrl='https://www.nexusmods.com/starwarszerocompany/mods/'+m.mod_id;
+    var endorsements='⬆ '+(m.endorsement_count||0).toLocaleString();
+    var downloads='⬇ '+(m.mod_downloads||0).toLocaleString();
+
+    var thumb=m.picture_url
+      ?'<img class="mod-thumb" src="'+m.picture_url+'" loading="lazy" alt="">'
+      :'<div class="mod-thumb-ph">⚔</div>';
+
+    card.innerHTML=thumb+
+      '<div class="mod-body">'+
+        '<div style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap">'+
+          '<div class="mod-name"></div>'+
+          (inst?'<span class="installed-badge">Instalado</span>':'')+
+        '</div>'+
+        '<div class="mod-meta">'+
+          '<span>'+endorsements+'</span>'+
+          '<span>'+downloads+'</span>'+
+          '<span class="mod-ver"></span>'+
+        '</div>'+
+        '<div class="mod-desc"></div>'+
+      '</div>'+
+      '<div class="mod-footer">'+
+        '<button class="install-btn'+(inst?' installed':'')+'"'+(inst?' disabled':'')+'>'+(inst?'✓ INSTALADO':'INSTALAR')+'</button>'+
+        '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">↗</a>'+
+      '</div>';
+
+    card.querySelector('.mod-name').textContent=m.name;
+    card.querySelector('.mod-desc').textContent=desc;
+    card.querySelector('.mod-ver').textContent='v'+(m.version||'?');
+
+    if(!inst){
+      var btn=card.querySelector('.install-btn');
+      (function(modId,modName,b){
+        b.addEventListener('click',function(){
+          window.open(LOCAL+'?nx_install='+modId+'&nx_name='+encodeURIComponent(modName),'swmp_host');
+        });
+      })(m.mod_id,m.name,btn);
     }
+    grid.appendChild(card);
   });
-},{threshold:.5});
-sections.forEach(s=>io.observe(s));
+}
 </script>
-</body>
-</html>

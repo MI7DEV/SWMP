@@ -720,6 +720,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 "game_running":_game_running,"game_found":GAME_ROOT is not None,
                 "explorer_done":_explorer_done,"install_status":_install_status,
                 "my_mods":list_mods(),"pak_mods":list_paks(),
+                "install_log":_install_log[-12:],
             }).encode()
             return self._reply(200,"application/json", body)
 
@@ -751,6 +752,10 @@ class _HTTP(BaseHTTPRequestHandler):
 
         if path == "/api/nexus/installed":
             body = json.dumps({"mods":list_mods(),"paks":list_paks()}).encode()
+            return self._reply(200,"application/json", body)
+
+        if path == "/api/install-log":
+            body = json.dumps({"log": _install_log, "status": _install_status}).encode()
             return self._reply(200,"application/json", body)
 
         if path == "/api/nexus/uninstall":
