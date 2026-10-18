@@ -4,12 +4,12 @@ cd /d "%~dp0"
 chcp 65001 >nul 2>&1
 
 echo.
-echo  ╔══════════════════════════════════════╗
-echo  ║   ⚔  STAR WARS ZERO COMPANY MP      ║
-echo  ╚══════════════════════════════════════╝
+echo  +======================================+
+echo     STAR WARS ZERO COMPANY MP
+echo  +======================================+
 echo.
 
-:: ── Verificar Python ──────────────────────────────────────────────
+:: Verificar Python
 python --version >nul 2>&1
 if errorlevel 1 (
     echo  [ERRO] Python nao encontrado.
@@ -20,7 +20,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: ── Instalar dependencias ─────────────────────────────────────────
+:: Instalar dependencias
 python -c "import websockets" >nul 2>&1
 if errorlevel 1 (
     echo  Instalando websockets...
@@ -32,15 +32,15 @@ if errorlevel 1 (
     )
 )
 
-:: ── Matar instancia anterior ──────────────────────────────────────
+:: Matar instancia anterior
 taskkill /F /FI "WINDOWTITLE eq ZeroCompanyMP-Server*" /IM python.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-:: ── Lançar servidor com watchdog ──────────────────────────────────
+:: Lancar servidor com watchdog
 echo  Iniciando servidor...
 start "ZeroCompanyMP-Server" /min cmd /c "title ZeroCompanyMP-Server && :loop && python server.py && timeout /t 3 /nobreak >nul && goto loop"
 
-:: ── Aguardar servidor ficar pronto ───────────────────────────────
+:: Aguardar servidor ficar pronto
 set TRIES=0
 :wait_loop
 set /a TRIES+=1
@@ -61,11 +61,10 @@ echo.
 echo  Abrindo interface do host...
 start http://localhost:8766
 echo.
-echo  ─── Partilha este IP com o teu amigo ───────────────────────────
+echo  IPs locais (so funciona na mesma rede):
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
     for /f "tokens=1" %%b in ("%%a") do echo     http://%%b:8766
 )
-echo  ────────────────────────────────────────────────────────────────
 echo.
 echo  Servidor a correr em background. Fecha esta janela para parar.
 echo  Para reiniciar: executa start.bat novamente.
