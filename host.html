@@ -567,22 +567,27 @@ function renderNexusGrid(mods){
 
     const btnLabel = inst ? '✓ Instalado' : '⬇ Instalar';
     const btnCls   = inst ? 'btn-install installed' : 'btn-install';
+    const safeName = m.name || 'Mod';
 
+    // Build card with DOM (avoids XSS via m.name / m.description)
     card.innerHTML = `
       ${thumbHtml}
       <div class="nx-body">
-        <div class="nx-name">${m.name||'Mod'}</div>
-        <div class="nx-endorsements">${endorsements}</div>
-        <div class="nx-desc">${desc}</div>
+        <div class="nx-name"></div>
+        <div class="nx-endorsements"></div>
+        <div class="nx-desc"></div>
       </div>
       <div class="nx-footer">
-        <button class="${btnCls}" id="btn-nx-${modId}"
-          onclick="installMod(${modId},'${escStr(m.name||'Mod')}',${inst})"
-          ${inst?'disabled':''}>
+        <button class="${btnCls}" id="btn-nx-${modId}" ${inst?'disabled':''}>
           ${btnLabel}
         </button>
-        <a class="btn-nexus-link" href="${nexusUrl}" target="_blank" title="Ver no Nexus">↗</a>
+        <a class="btn-nexus-link" href="${nexusUrl}" target="_blank" rel="noopener" title="Ver no Nexus">↗</a>
       </div>`;
+    card.querySelector('.nx-name').textContent = safeName;
+    card.querySelector('.nx-endorsements').textContent = endorsements;
+    card.querySelector('.nx-desc').textContent = desc;
+    const installBtn = card.querySelector(`#btn-nx-${modId}`);
+    installBtn.addEventListener('click', () => installMod(modId, safeName, inst));
     grid.appendChild(card);
   });
 }
