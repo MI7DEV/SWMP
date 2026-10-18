@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWMP — Star Wars Zero Company Multiplayer</title>
+<meta name="description" content="Sistema de multijogador local para Star Wars Zero Company. Co-op para 2 jogadores com gestão de mods integrada.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#02050f;
+  --bg2:#050c1a;
+  --bg3:#090f20;
+  --gold:#f5c842;
+  --gold2:#c9942a;
+  --blue:#1a7fff;
+  --blue2:#4dabff;
+  --red:#e84040;
+  --green:#27c96b;
+  --gray:#60718a;
+  --fg:#d4ddef;
+  --fg2:#8898b8;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:"Rajdhani",system-ui,sans-serif;
+  font-size:16px;
+  overflow-x:hidden;
+}
+
+/* ─── Stars ─── */
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0}
+.stars canvas{display:block;width:100%;height:100%}
+
+/* ─── Scanlines overlay ─── */
+body::after{
+  content:"";
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
+  pointer-events:none;z-index:1;
+}
+
+/* ─── NAV ─── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(2,5,15,.85);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(245,200,66,.15);
+  padding:0 max(20px,4vw);
+  display:flex;align-items:center;gap:16px;height:58px;
+}
+.nav-logo{
+  font-family:"Orbitron",sans-serif;
+  font-size:1rem;font-weight:900;
+  color:var(--gold);letter-spacing:.12em;
+  text-decoration:none;
+}
+.nav-logo span{color:var(--fg2);font-weight:400}
+.nav-links{display:flex;gap:6px;margin-left:auto}
+.nav-link{
+  font-size:.8rem;letter-spacing:.08em;font-weight:600;
+  color:var(--fg2);text-decoration:none;
+  padding:6px 14px;border-radius:4px;
+  transition:color .2s,background .2s;
+}
+.nav-link:hover{color:var(--gold);background:rgba(245,200,66,.07)}
+.nav-cta{
+  background:var(--gold);color:#000;
+  font-family:"Orbitron",sans-serif;font-size:.72rem;
+  font-weight:700;letter-spacing:.06em;
+  padding:8px 18px;border-radius:4px;
+  text-decoration:none;
+  transition:background .2s,transform .1s;
+}
+.nav-cta:hover{background:#e6b82e;transform:scale(1.03)}
+
+/* ─── HERO ─── */
+.hero{
+  position:relative;z-index:2;
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:100px max(20px,4vw) 60px;
+}
+.crawl-wrapper{
+  width:min(520px,90vw);
+  background:linear-gradient(160deg,rgba(245,200,66,.05),transparent);
+  border:1px solid rgba(245,200,66,.12);
+  border-radius:8px;
+  padding:28px 32px;
+  margin-bottom:48px;
+  font-size:.82rem;color:var(--gold2);
+  font-style:italic;line-height:1.8;letter-spacing:.04em;
+  text-align:justify;
+}
+.empire-divider{
+  width:80px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+  margin:0 auto 32px;
+}
+.hero-badge{
+  font-family:"Orbitron",sans-serif;
+  font-size:.7rem;letter-spacing:.25em;font-weight:600;
+  color:var(--blue2);margin-bottom:16px;
+}
+.hero-title{
+  font-family:"Orbitron",sans-serif;
+  font-size:clamp(2rem,6vw,3.8rem);
+  font-weight:900;line-height:1.05;
+  color:var(--gold);
+  text-shadow:0 0 60px rgba(245,200,66,.4),0 0 120px rgba(245,200,66,.15);
+  margin-bottom:10px;letter-spacing:.04em;
+}
+.hero-sub{
+  font-family:"Orbitron",sans-serif;
+  font-size:clamp(.85rem,2vw,1.1rem);
+  font-weight:600;color:var(--fg2);
+  letter-spacing:.18em;margin-bottom:24px;
+}
+.hero-desc{
+  max-width:540px;margin:0 auto 40px;
+  font-size:1.1rem;color:var(--fg);line-height:1.7;
+  font-weight:500;
+}
+.hero-buttons{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn-hero{
+  font-family:"Orbitron",sans-serif;
+  font-size:.78rem;font-weight:700;
+  letter-spacing:.08em;
+  padding:14px 32px;border-radius:5px;
+  text-decoration:none;border:none;cursor:pointer;
+  transition:all .2s;display:inline-flex;align-items:center;gap:8px;
+}
+.btn-primary{background:var(--gold);color:#000}
+.btn-primary:hover{background:#e6b82e;transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,200,66,.35)}
+.btn-secondary{
+  background:transparent;color:var(--fg);
+  border:1px solid rgba(245,200,66,.3);
+}
+.btn-secondary:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+
+/* ─── SABER LINE ─── */
+.saber-line{
+  width:100%;max-width:700px;margin:48px auto;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(77,171,255,.5),var(--blue2),rgba(77,171,255,.5),transparent);
+  position:relative;z-index:2;
+}
+
+/* ─── FEATURES ─── */
+.section{
+  position:relative;z-index:2;
+  padding:80px max(20px,4vw);
+  max-width:1100px;margin:0 auto;
+}
+.section-label{
+  font-family:"Orbitron",sans-serif;
+  font-size:.68rem;letter-spacing:.3em;color:var(--blue2);
+  text-align:center;margin-bottom:12px;
+}
+.section-title{
+  font-family:"Orbitron",sans-serif;
+  font-size:clamp(1.4rem,3.5vw,2.2rem);
+  font-weight:700;text-align:center;color:var(--gold);
+  margin-bottom:8px;letter-spacing:.04em;
+}
+.section-sub{
+  text-align:center;color:var(--fg2);
+  font-size:1rem;margin-bottom:48px;
+  max-width:560px;margin-left:auto;margin-right:auto;
+}
+
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.feat{
+  background:var(--bg2);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:8px;padding:28px 24px;
+  transition:border-color .2s,transform .2s;
+}
+.feat:hover{border-color:rgba(245,200,66,.25);transform:translateY(-3px)}
+.feat-icon{font-size:2rem;margin-bottom:14px}
+.feat-title{
+  font-family:"Orbitron",sans-serif;
+  font-size:.85rem;font-weight:700;
+  color:var(--fg);letter-spacing:.05em;margin-bottom:8px;
+}
+.feat-desc{font-size:.92rem;color:var(--fg2);line-height:1.6}
+
+/* ─── HOW IT WORKS ─── */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;position:relative}
+.steps::before{
+  content:"";position:absolute;top:28px;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(245,200,66,.2),rgba(245,200,66,.4),rgba(245,200,66,.2),transparent);
+}
+.step{padding:24px;text-align:center;position:relative}
+.step-num{
+  width:56px;height:56px;border-radius:50%;
+  border:2px solid var(--gold);
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  font-family:"Orbitron",sans-serif;font-size:1.1rem;font-weight:900;
+  color:var(--gold);margin:0 auto 16px;
+  position:relative;z-index:1;
+  box-shadow:0 0 20px rgba(245,200,66,.25);
+}
+.step-title{font-family:"Orbitron",sans-serif;font-size:.78rem;font-weight:700;color:var(--fg);letter-spacing:.06em;margin-bottom:8px}
+.step-desc{font-size:.88rem;color:var(--fg2);line-height:1.5}
+
+/* ─── DOWNLOAD CARD ─── */
+.download-section{
+  position:relative;z-index:2;
+  padding:0 max(20px,4vw) 100px;
+}
+.download-card{
+  max-width:760px;margin:0 auto;
+  background:linear-gradient(135deg,rgba(245,200,66,.06),rgba(26,127,255,.04));
+  border:1px solid rgba(245,200,66,.2);
+  border-radius:12px;
+  padding:48px;text-align:center;
+}
+.download-card h2{
+  font-family:"Orbitron",sans-serif;
+  font-size:1.6rem;font-weight:700;
+  color:var(--gold);margin-bottom:12px;letter-spacing:.06em;
+}
+.download-card p{color:var(--fg2);margin-bottom:32px;font-size:1rem;line-height:1.6}
+.download-files{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px;text-align:left}
+.dl-file{
+  background:var(--bg3);border:1px solid rgba(255,255,255,.06);
+  border-radius:6px;padding:14px 16px;
+  display:flex;align-items:center;gap:12px;
+}
+.dl-icon{font-size:1.4rem}
+.dl-name{font-family:"Orbitron",sans-serif;font-size:.72rem;font-weight:600;color:var(--fg);letter-spacing:.04em}
+.dl-desc{font-size:.78rem;color:var(--fg2);margin-top:2px}
+.requirements{
+  background:var(--bg3);border-radius:6px;padding:16px;
+  font-size:.82rem;color:var(--fg2);line-height:1.7;text-align:left;
+}
+.requirements strong{color:var(--gold);font-family:"Orbitron",sans-serif;font-size:.72rem;letter-spacing:.06em}
+
+/* ─── JOIN SECTION ─── */
+.join-section{
+  position:relative;z-index:2;
+  background:var(--bg2);
+  border-top:1px solid rgba(245,200,66,.1);
+  border-bottom:1px solid rgba(245,200,66,.1);
+  padding:80px max(20px,4vw);
+}
+.join-card{
+  max-width:480px;margin:0 auto;
+  background:var(--bg3);
+  border:1px solid rgba(26,127,255,.2);
+  border-radius:12px;overflow:hidden;
+}
+.join-hd{
+  background:linear-gradient(135deg,#050c1a,#0a1428);
+  padding:20px 24px;
+  border-bottom:1px solid rgba(26,127,255,.15);
+  text-align:center;
+}
+.join-hd h3{
+  font-family:"Orbitron",sans-serif;
+  font-size:.88rem;font-weight:700;color:var(--blue2);
+  letter-spacing:.1em;
+}
+.join-bd{padding:24px}
+.field-lbl{
+  font-size:.72rem;color:var(--gray);
+  letter-spacing:.08em;margin-bottom:6px;
+  font-family:"Orbitron",sans-serif;font-weight:600;
+}
+input[type=text]{
+  width:100%;background:var(--bg2);
+  border:1px solid rgba(26,127,255,.2);
+  border-radius:5px;color:var(--gold);
+  font-size:1rem;font-family:"Consolas",monospace;
+  padding:11px 14px;outline:none;
+  transition:border-color .2s;margin-bottom:14px;
+}
+input[type=text]:focus{border-color:var(--blue)}
+input::placeholder{color:var(--gray);font-size:.82rem}
+.btn-connect{
+  width:100%;padding:13px;border:none;
+  border-radius:5px;cursor:pointer;
+  font-family:"Orbitron",sans-serif;font-size:.8rem;
+  font-weight:700;letter-spacing:.06em;
+  background:var(--blue);color:#fff;
+  transition:background .2s,transform .1s;
+}
+.btn-connect:hover{background:#1a8fff;transform:scale(1.01)}
+.join-note{
+  font-size:.78rem;color:var(--gray);
+  text-align:center;margin-top:12px;line-height:1.5;
+}
+.join-note a{color:var(--blue2);text-decoration:none}
+.join-status{
+  display:none;text-align:center;padding:12px;
+  border-radius:5px;margin-top:12px;
+  font-size:.85rem;font-weight:600;
+}
+.join-status.ok{background:#0e2d1a;color:var(--green);border:1px solid #1a4d2a}
+.join-status.err{background:#2a0e0e;color:var(--red);border:1px solid #4a1a1a}
+
+/* ─── FOOTER ─── */
+footer{
+  position:relative;z-index:2;
+  padding:32px max(20px,4vw);
+  border-top:1px solid rgba(245,200,66,.08);
+  text-align:center;
+}
+.footer-logo{
+  font-family:"Orbitron",sans-serif;
+  font-size:.85rem;font-weight:900;color:var(--gold);
+  letter-spacing:.12em;margin-bottom:8px;
+}
+.footer-sub{font-size:.78rem;color:var(--gray);line-height:1.6}
+.footer-sub a{color:var(--fg2);text-decoration:none}
+.footer-sub a:hover{color:var(--gold)}
+
+@media(max-width:600px){
+  .download-files{grid-template-columns:1fr}
+  .steps::before{display:none}
+  .hero-title{font-size:1.9rem}
+}
+</style>
+</head>
+<body>
+
+<div class="stars"><canvas id="starfield"></canvas></div>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="/">SWMP <span>// ZERO COMPANY</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="#como-funciona">Como Funciona</a>
+    <a class="nav-link" href="#download">Download</a>
+    <a class="nav-cta" href="#join">⚔ Juntar ao Jogo</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="crawl-wrapper">
+    "Numa galáxia muito, muito distante… a aliança da camaradagem
+    encontrou uma forma de lutar lado a lado — através das fronteiras
+    do éter digital. Dois comandantes. Uma missão. O Império não sabe
+    o que está por vir."
+  </div>
+  <div class="empire-divider"></div>
+  <div class="hero-badge">— SISTEMA DE MULTIJOGADOR —</div>
+  <h1 class="hero-title">STAR WARS<br>ZERO COMPANY</h1>
+  <p class="hero-sub">MULTIPLAYER PROTOCOL · v0.2</p>
+  <p class="hero-desc">
+    Co-op local para 2 jogadores com sincronização de turnos,
+    divisão automática de unidades e gestão integrada de mods via Nexus.
+  </p>
+  <div class="hero-buttons">
+    <a class="btn-hero btn-primary" href="#download">⬇ Descarregar</a>
+    <a class="btn-hero btn-secondary" href="#join">⚔ Juntar ao Jogo</a>
+    <a class="btn-hero btn-secondary" href="https://github.com/MI7DEV/SWMP" target="_blank">⚙ GitHub</a>
+  </div>
+</section>
+
+<div class="saber-line"></div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">CAPACIDADES DO SISTEMA</div>
+  <h2 class="section-title">O que o SWMP oferece</h2>
+  <p class="section-sub">Engenharia reversa ao serviço da Aliança — multijogador onde nunca existiu.</p>
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">⚔</div>
+      <div class="feat-title">Divisão de Unidades</div>
+      <div class="feat-desc">Host controla metade do esquadrão, cliente a outra metade. Sincronização automática de turnos em tempo real.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔄</div>
+      <div class="feat-title">Relay WebSocket</div>
+      <div class="feat-desc">Servidor Python local com relay persistente. Latência mínima para jogar em rede local (LAN) ou internet.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🎮</div>
+      <div class="feat-title">Gestor de Mods</div>
+      <div class="feat-desc">Integração com Nexus Mods — navega os 30 mais endorsados, instala e sincroniza entre os dois jogadores automaticamente.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔍</div>
+      <div class="feat-title">Explorer de Classes</div>
+      <div class="feat-desc">Captura as classes internas do UE5 via UE4SS para mapeamento preciso das unidades e sincronização de ações.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-title">Auto-Setup</div>
+      <div class="feat-desc">Um clique no start.bat instala tudo — Python, WebSockets, UE4SS, mod Lua — e abre o painel de controlo.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🛡</div>
+      <div class="feat-title">Watchdog Automático</div>
+      <div class="feat-desc">O servidor reinicia automaticamente se cair. API key do Nexus guardada localmente em config.json.</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="como-funciona">
+  <div class="section-label">PROTOCOLO DE ACTIVAÇÃO</div>
+  <h2 class="section-title">Como Funciona</h2>
+  <p class="section-sub">Três passos para comandar o esquadrão com o teu aliado.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-title">Host Inicia</div>
+      <div class="step-desc">Executa start.bat. O servidor arranca e o painel do host abre no browser.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-title">Amigo Conecta</div>
+      <div class="step-desc">Acede ao link do host ou usa a página "Juntar ao Jogo" com o IP fornecido.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-title">Explorar & Jogar</div>
+      <div class="step-desc">Com o jogo aberto numa missão, clica "Explorar Jogo" para sincronizar e dividir as unidades.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <div class="step-title">Mods Opcionais</div>
+      <div class="step-desc">Navega os top 30 mods do Nexus, instala os que quiser — ambos ficam sincronizados automaticamente.</div>
+    </div>
+  </div>
+</section>
+
+<!-- JOIN SECTION -->
+<section class="join-section" id="join">
+  <div class="section-label">PAINEL DO CLIENTE</div>
+  <h2 class="section-title">Juntar ao Jogo</h2>
+  <p class="section-sub" style="margin-bottom:32px">O host já iniciou o servidor? Cola o IP e conecta.</p>
+  <div class="join-card">
+    <div class="join-hd">
+      <h3>⚔ LIGAÇÃO AO HOST</h3>
+    </div>
+    <div class="join-bd">
+      <div class="field-lbl">IP DO HOST</div>
+      <input type="text" id="host-ip" placeholder="ex: 192.168.1.100" autocomplete="off">
+      <button class="btn-connect" onclick="joinGame()">CONECTAR AO JOGO</button>
+      <div id="join-status" class="join-status"></div>
+      <p class="join-note">
+        O host partilha o IP visível no seu painel.<br>
+        A ligação vai para <strong style="color:var(--blue2)">ws://[IP]:8765</strong><br>
+        <a href="#download">Não tens o servidor instalado?</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download-section" style="padding-top:80px" id="download">
+  <div class="download-card">
+    <h2>⬇ DESCARREGAR SWMP</h2>
+    <p>Todos os ficheiros necessários para o host iniciar o servidor de multijogador.</p>
+    <div class="download-files">
+      <div class="dl-file">
+        <div class="dl-icon">🐍</div>
+        <div>
+          <div class="dl-name">server.py</div>
+          <div class="dl-desc">Servidor WebSocket + HTTP relay</div>
+        </div>
+      </div>
+      <div class="dl-file">
+        <div class="dl-icon">🖥</div>
+        <div>
+          <div class="dl-name">host.html</div>
+          <div class="dl-desc">Painel de controlo do host</div>
+        </div>
+      </div>
+      <div class="dl-file">
+        <div class="dl-icon">👾</div>
+        <div>
+          <div class="dl-name">start.bat</div>
+          <div class="dl-desc">Launcher automático (Windows)</div>
+        </div>
+      </div>
+      <div class="dl-file">
+        <div class="dl-icon">🎮</div>
+        <div>
+          <div class="dl-name">ZeroCompanyMP.lua</div>
+          <div class="dl-desc">Mod UE4SS para sincronização</div>
+        </div>
+      </div>
+    </div>
+    <a class="btn-hero btn-primary" href="https://github.com/MI7DEV/SWMP" target="_blank" style="display:inline-flex;margin:0 auto">⚙ Ver no GitHub</a>
+    <div class="requirements" style="margin-top:24px">
+      <strong>REQUISITOS</strong><br>
+      Python 3.10+ &nbsp;·&nbsp; Star Wars Zero Company (Steam/EA) &nbsp;·&nbsp;
+      UE4SS v3.x &nbsp;·&nbsp; Windows 10/11 &nbsp;·&nbsp;
+      Conta Nexus Mods (gratuita) para gestão de mods
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">SWMP // ZERO COMPANY</div>
+  <div class="footer-sub">
+    Projeto de engenharia reversa por <a href="https://github.com/MI7DEV">MI7DEV</a><br>
+    Star Wars Zero Company © Electronic Arts · Este projeto não é afiliado à EA ou Lucasfilm.<br>
+    <a href="https://github.com/MI7DEV/SWMP">GitHub</a> ·
+    <a href="https://www.nexusmods.com/starwarszerocompany" target="_blank">Nexus Mods</a>
+  </div>
+</footer>
+
+<script>
+// ── Stars ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('starfield');
+const ctx = canvas.getContext('2d');
+let stars = [];
+function resize(){
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+function initStars(){
+  stars = [];
+  const n = Math.floor(canvas.width * canvas.height / 3000);
+  for(let i=0;i<n;i++){
+    stars.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      r: Math.random()*1.5 + 0.2,
+      a: Math.random(),
+      da: (Math.random()-.5)*.005
+    });
+  }
+}
+function drawStars(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  stars.forEach(s=>{
+    s.a += s.da;
+    if(s.a<=0||s.a>=1) s.da*=-1;
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,230,${s.a})`;
+    ctx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+window.addEventListener('resize',()=>{ resize(); initStars(); });
+resize(); initStars(); drawStars();
+
+// ── Join ───────────────────────────────────────────────────────────────────
+function joinGame(){
+  const ip = document.getElementById('host-ip').value.trim().replace(/^https?:\/\//,'').split(':')[0];
+  const st = document.getElementById('join-status');
+  if(!ip){ showStatus('Cola o IP do host primeiro.','err'); return; }
+  // Tentar abrir client.html no servidor local do host
+  const url = `http://${ip}:8766/client.html`;
+  st.className='join-status ok';
+  st.style.display='block';
+  st.textContent='⟳ A abrir ligação ao host…';
+  window.open(url, '_blank');
+  setTimeout(()=>{
+    st.textContent=`✓ Abriste ${url} — se não carregou, confirma que o host iniciou o start.bat.`;
+  },1500);
+}
+function showStatus(msg, type){
+  const st = document.getElementById('join-status');
+  st.className='join-status '+(type||'err');
+  st.style.display='block';
+  st.textContent=msg;
+}
+
+// ── Nav scroll highlight ───────────────────────────────────────────────────
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.nav-link');
+const io = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      links.forEach(l=>{
+        l.style.color = l.getAttribute('href')==='#'+e.target.id ? 'var(--gold)' : '';
+      });
+    }
+  });
+},{threshold:.5});
+sections.forEach(s=>io.observe(s));
+</script>
+</body>
+</html>

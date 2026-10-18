@@ -1,0 +1,322 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Zero Company MP</title>
+<style>
+:root {
+  --bg:    #070a12;
+  --bg2:   #0c1122;
+  --bg3:   #141c35;
+  --gold:  #f5c842;
+  --blue:  #4d8bf5;
+  --green: #27c96b;
+  --red:   #e84040;
+  --gray:  #60718a;
+  --fg:    #d4ddef;
+  --fg2:   #8898b8;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-block: 32px;
+  padding-left:  max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg2);
+  border: 1px solid #1a2540;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.top {
+  background: linear-gradient(135deg, #050810 0%, #0b152a 100%);
+  text-align: center;
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid #1a2540;
+}
+.top h1 {
+  font-size: 1.25rem;
+  color: var(--gold);
+  letter-spacing: .07em;
+  font-weight: 700;
+}
+.top p {
+  font-size: .7rem;
+  color: var(--gray);
+  letter-spacing: .07em;
+  margin-top: 5px;
+}
+.stripe {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+/* ── Body ── */
+.body {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Status block ── */
+.status-block {
+  background: var(--bg3);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--gray);
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.dot.connecting { background: var(--blue);  animation: blink  1s   infinite; }
+.dot.ok         { background: var(--green); animation: pulse  2s   infinite; box-shadow: 0 0 8px var(--green); }
+.dot.error      { background: var(--red); }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+@keyframes blink { 0%,100%{opacity:.25} 50%{opacity:1} }
+
+.st-main { font-size: .95rem; font-weight: 600; color: var(--fg); }
+.st-sub  { font-size: .74rem; color: var(--gray); margin-top: 3px; }
+
+/* ── IP field ── */
+.field-lbl {
+  font-size: .7rem;
+  color: var(--gray);
+  letter-spacing: .07em;
+  margin-bottom: 6px;
+}
+input[type=text] {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid #1a2540;
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 1rem;
+  font-family: "Consolas", monospace;
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color .2s;
+}
+input[type=text]:focus { border-color: var(--blue); }
+input[type=text]::placeholder { color: var(--gray); font-size: .82rem; font-family: inherit; }
+
+/* ── Button ── */
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: .95rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .03em;
+  transition: opacity .15s, transform .1s;
+  background: var(--gold);
+  color: #000;
+}
+.btn:active  { transform: scale(.98); }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.btn.ok { background: var(--green); color: #fff; }
+
+/* ── Success panel ── */
+.panel-ok {
+  display: none;
+  text-align: center;
+  padding: 6px 0;
+}
+.panel-ok .big { font-size: 2.4rem; color: var(--green); }
+.panel-ok p    { color: var(--fg2); font-size: .85rem; line-height: 1.6; margin-top: 8px; }
+
+/* ── Log ── */
+.log {
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: "Consolas", monospace;
+  font-size: .75rem;
+  color: var(--fg2);
+  height: 130px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.log::-webkit-scrollbar       { width: 4px; }
+.log::-webkit-scrollbar-thumb { background: #1a2540; border-radius: 2px; }
+.lr   { display: flex; gap: 8px; }
+.ts   { color: var(--gray); flex-shrink: 0; }
+.c-green { color: var(--green); }
+.c-gold  { color: var(--gold);  }
+.c-red   { color: var(--red);   }
+.c-blue  { color: var(--blue);  }
+.c-gray  { color: var(--gray);  }
+
+/* ── Footer ── */
+.footer {
+  text-align: center;
+  font-size: .68rem;
+  color: var(--gray);
+  padding: 12px 24px;
+  border-top: 1px solid #1a2540;
+}
+</style>
+
+<div class="card">
+  <div class="top">
+    <h1>⚔ ZERO COMPANY</h1>
+    <p>MULTIPLAYER · CLIENTE</p>
+  </div>
+  <div class="stripe"></div>
+
+  <div class="body">
+
+    <!-- Status -->
+    <div class="status-block">
+      <div class="dot connecting" id="dot"></div>
+      <div>
+        <div class="st-main" id="st-main">Aguardando conexão</div>
+        <div class="st-sub"  id="st-sub">Cola o IP do host e clica Conectar</div>
+      </div>
+    </div>
+
+    <!-- IP -->
+    <div id="ip-section">
+      <div class="field-lbl">IP DO HOST (que o teu amigo te passou)</div>
+      <input type="text" id="ip-input" placeholder="ex: 192.168.1.100" autocomplete="off">
+    </div>
+
+    <!-- Botão -->
+    <button class="btn" id="btn" onclick="doConnect()">CONECTAR</button>
+
+    <!-- Sucesso -->
+    <div class="panel-ok" id="panel-ok">
+      <div class="big">✓</div>
+      <p>Conectado ao host!<br>Aguarda que ele inicie a missão.</p>
+    </div>
+
+    <!-- Log -->
+    <div>
+      <div class="field-lbl">LOG</div>
+      <div class="log" id="log"></div>
+    </div>
+
+  </div>
+  <div class="footer">Zero Company MP v0.1 · Requer UE4SS instalado no jogo</div>
+</div>
+
+<script>
+const RELAY_PORT = 8765;
+let ws = null;
+
+function ts() {
+  return new Date().toTimeString().slice(0, 8);
+}
+function log(msg, c) {
+  const box = document.getElementById('log');
+  const r   = document.createElement('div');
+  r.className = 'lr';
+  r.innerHTML = `<span class="ts">[${ts()}]</span><span class="${c ? 'c-' + c : ''}">${msg}</span>`;
+  box.appendChild(r);
+  box.scrollTop = box.scrollHeight;
+}
+function setStatus(main, sub, dotCls) {
+  document.getElementById('st-main').textContent = main;
+  document.getElementById('st-sub').textContent  = sub;
+  document.getElementById('dot').className = 'dot ' + (dotCls || '');
+}
+function showSuccess() {
+  setStatus('Conectado!', 'Aguarda o host iniciar a missão', 'ok');
+  document.getElementById('ip-section').style.display  = 'none';
+  document.getElementById('btn').style.display         = 'none';
+  document.getElementById('panel-ok').style.display    = 'block';
+}
+
+function getHostIp() {
+  const h = location.hostname;
+  if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.includes('claude.ai') && !h.includes('anthropic')) return h;
+  const p = new URLSearchParams(location.search).get('host');
+  if (p) return p;
+  return document.getElementById('ip-input').value.trim().replace(/^https?:\/\//, '').split(':')[0];
+}
+
+function doConnect() {
+  const ip = getHostIp();
+  if (!ip) { log('Coloca o IP do host primeiro!', 'red'); return; }
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  btn.textContent = 'Conectando…';
+  setStatus('Conectando…', `ws://${ip}:${RELAY_PORT}`, 'connecting');
+  log(`Ligando a ${ip}:${RELAY_PORT}…`, 'blue');
+
+  try { ws = new WebSocket(`ws://${ip}:${RELAY_PORT}`); }
+  catch (e) {
+    log('Erro: ' + e.message, 'red');
+    btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    return;
+  }
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'HELLO', role: 'client' }));
+    log('Socket aberto. Aguardando confirmação…', 'blue');
+  };
+
+  ws.onmessage = ev => {
+    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'STATE') {
+      if (msg.friend) { showSuccess(); log('Host já estava online!', 'green'); }
+      else { setStatus('Aguardando host…', 'Relay ligado, host ainda não chegou', 'connecting'); log('Relay ligado — aguarda o host.', 'gold'); }
+    } else if (msg.type === 'PEER_CONNECTED' && msg.role === 'host') {
+      log('🟢 Host conectou!', 'gold'); showSuccess();
+    } else if (msg.type === 'PEER_DISCONNECTED' && msg.role === 'host') {
+      log('Host desconectou.', 'red');
+      setStatus('Host desconectou', 'Aguarda que o host religue o servidor', 'error');
+      document.getElementById('panel-ok').style.display = 'none';
+      document.getElementById('btn').style.display = 'block';
+      btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+    } else if (msg.type === 'LOG') {
+      log(msg.msg, msg.c || '');
+    }
+  };
+
+  ws.onerror = () => {
+    log(`Falha a ligar a ${ip}:${RELAY_PORT}`, 'red');
+    log('O server.py do host está a correr? Estão na mesma rede?', 'gold');
+    setStatus('Falha na ligação', 'Verifica o IP e tenta novamente', 'error');
+    btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
+  };
+}
+
+// Auto-ligar se o IP vier na URL ou no hostname
+const autoIp = getHostIp();
+if (autoIp) {
+  document.getElementById('ip-input').value = autoIp;
+  document.getElementById('ip-section').style.display = 'none';
+  log('IP detectado: ' + autoIp, 'green');
+  setTimeout(doConnect, 600);
+} else {
+  setStatus('Aguardando IP do host', 'Cola o IP que o host te enviou', '');
+  log('Cola o IP do host e clica CONECTAR.', 'gray');
+}
+</script>

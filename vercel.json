@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/client", "dest": "/client.html" },
+    { "src": "/host",   "dest": "/host.html"   },
+    { "src": "/(.*)",   "dest": "/$1"           }
+  ]
+}

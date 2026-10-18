@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zero Company MP — Host</title>
+<style>
+:root{
+  --bg:#070a12;--bg2:#0c1122;--bg3:#141c35;
+  --gold:#f5c842;--blue:#4d8bf5;--green:#27c96b;
+  --red:#e84040;--gray:#60718a;--fg:#d4ddef;--fg2:#8898b8;--r:8px
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:var(--bg);color:var(--fg);
+  font-family:"Segoe UI",system-ui,sans-serif;font-size:14px}
+body{padding:0 0 40px}
+
+.topbar{background:var(--bg2);border-bottom:1px solid #1a2540;
+  padding:16px max(16px,2vw);display:flex;align-items:center;gap:12px}
+.topbar h1{font-size:1.1rem;color:var(--gold);letter-spacing:.06em;font-weight:700;flex:1}
+.badge{font-size:.72rem;background:var(--bg3);color:var(--gray);
+  padding:4px 10px;border-radius:20px;letter-spacing:.04em}
+.conn-dot{width:9px;height:9px;border-radius:50%;background:var(--gray);
+  animation:pulse 1.5s infinite}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+.main{max-width:700px;margin:0 auto;padding:20px max(16px,2vw);
+  display:flex;flex-direction:column;gap:14px}
+
+.card{background:var(--bg2);border:1px solid #1a2540;border-radius:var(--r);overflow:hidden}
+.card-hd{padding:10px 16px;border-bottom:1px solid #1a2540;
+  font-size:.7rem;color:var(--gray);letter-spacing:.07em;font-weight:600;
+  display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.card-hd:hover{background:#0e1627}
+.card-bd{padding:14px 16px}
+.card-hd .toggle{margin-left:auto;font-size:.8rem;transition:transform .2s}
+.card.collapsed .card-bd{display:none}
+.card.collapsed .toggle{transform:rotate(-90deg)}
+
+/* Share */
+.share-url{font-family:"Consolas",monospace;font-size:1rem;color:var(--gold);
+  background:var(--bg3);border-radius:6px;padding:11px 14px;
+  word-break:break-all;cursor:pointer;user-select:all;transition:background .15s}
+.share-url:hover{background:#1e2d50}
+.hint{font-size:.72rem;color:var(--gray);margin-top:6px}
+
+/* Players */
+.players{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.player{background:var(--bg3);border-radius:6px;padding:12px 14px;
+  display:flex;align-items:center;gap:10px}
+.pdot{width:10px;height:10px;border-radius:50%;background:var(--gray);
+  flex-shrink:0;transition:background .3s}
+.pdot.on {background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+.pdot.wait{background:var(--gold);animation:pulse 1.5s infinite}
+.p-name{font-size:.85rem;font-weight:600}
+.p-sub {font-size:.72rem;color:var(--gray);margin-top:2px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Game */
+.game-row{display:flex;align-items:center;gap:10px}
+.gd{width:10px;height:10px;border-radius:50%;background:var(--gray);flex-shrink:0}
+.gd.running{background:var(--green);box-shadow:0 0 8px var(--green)}
+.gtxt{font-size:.88rem;color:var(--fg2)}
+
+/* Buttons */
+.btn{display:block;width:100%;padding:12px;border:none;border-radius:6px;
+  font-size:.9rem;font-weight:700;cursor:pointer;letter-spacing:.03em;
+  transition:opacity .15s,transform .1s;margin-top:10px}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-gold{background:var(--gold);color:#000}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-green{background:var(--green);color:#000}
+.btn-sm{display:inline-block;width:auto;padding:5px 12px;
+  font-size:.75rem;margin-top:0;border-radius:5px}
+
+/* Char split */
+.split-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.split-card{background:var(--bg3);border-radius:6px;padding:10px 12px;text-align:center}
+.split-who{font-size:.75rem;color:var(--gray);letter-spacing:.06em;margin-bottom:4px}
+.split-units{font-size:1.1rem;color:var(--gold);font-weight:700}
+.split-hint{font-size:.72rem;color:var(--gray);margin-top:2px}
+
+/* Mods sync */
+.mod-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:8px}
+.mod-table th{text-align:left;color:var(--gray);font-weight:500;
+  padding:4px 8px;border-bottom:1px solid #1a2540}
+.mod-table td{padding:5px 8px;border-bottom:1px solid #0c1122}
+.badge-ok{background:#1a3a26;color:var(--green);border-radius:4px;
+  padding:1px 6px;font-size:.7rem}
+.badge-miss{background:#3a1a1a;color:var(--red);border-radius:4px;
+  padding:1px 6px;font-size:.7rem}
+
+/* Explorer result */
+.exp-result{background:var(--bg3);border-radius:6px;padding:10px 12px;
+  font-family:"Consolas",monospace;font-size:.75rem;color:var(--green);
+  max-height:120px;overflow-y:auto;display:none;margin-top:8px;white-space:pre-wrap}
+
+/* Log */
+.log{background:var(--bg);border-radius:6px;padding:8px 12px;
+  font-family:"Consolas",monospace;font-size:.75rem;color:var(--fg2);
+  height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.log::-webkit-scrollbar{width:4px}
+.log::-webkit-scrollbar-thumb{background:#1a2540;border-radius:2px}
+.lr{display:flex;gap:8px;align-items:baseline}
+.ts{color:var(--gray);flex-shrink:0}
+.c-green{color:var(--green)}.c-gold{color:var(--gold)}
+.c-red{color:var(--red)}.c-blue{color:var(--blue)}.c-gray{color:var(--gray)}
+
+/* Install banner */
+#install-banner{display:none;border-color:var(--blue);background:var(--bg2)}
+#install-banner .card-bd{display:flex;align-items:center;gap:10px;padding:10px 14px}
+#install-dot{width:10px;height:10px;border-radius:50%;background:var(--blue);
+  flex-shrink:0;animation:pulse 1s infinite}
+
+/* ─── Nexus Mod Browser ─── */
+.nx-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.nx-key-input{flex:1;min-width:160px;background:var(--bg3);border:1px solid #1a2540;
+  border-radius:5px;color:var(--fg2);font-size:.78rem;padding:7px 10px;outline:none;
+  font-family:"Consolas",monospace}
+.nx-key-input:focus{border-color:var(--blue)}
+.nx-key-input::placeholder{color:var(--gray);font-family:inherit}
+.btn-nx{display:inline-flex;align-items:center;gap:6px;width:auto;padding:8px 16px;
+  font-size:.82rem;margin-top:0;border:none;border-radius:5px;font-weight:700;
+  cursor:pointer;transition:opacity .15s,transform .1s;background:var(--blue);color:#fff}
+.btn-nx:hover{opacity:.9}
+.btn-nx:active{transform:scale(.97)}
+.btn-nx:disabled{opacity:.4;cursor:not-allowed}
+
+.nx-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:480px){.nx-grid{grid-template-columns:1fr}}
+
+.nx-card{background:var(--bg3);border-radius:6px;overflow:hidden;
+  border:1px solid #1a2540;display:flex;flex-direction:column;transition:border-color .2s}
+.nx-card.installed{border-color:#1a3a26}
+.nx-thumb{width:100%;height:80px;object-fit:cover;display:block;
+  background:#0a1020;opacity:.9}
+.nx-thumb-ph{width:100%;height:80px;background:linear-gradient(135deg,#0a1020,#141c35);
+  display:flex;align-items:center;justify-content:center;font-size:1.8rem}
+.nx-body{padding:8px 10px;flex:1;display:flex;flex-direction:column;gap:4px}
+.nx-name{font-size:.82rem;font-weight:700;color:var(--fg);line-height:1.3}
+.nx-endorsements{font-size:.7rem;color:var(--gold)}
+.nx-desc{font-size:.7rem;color:var(--fg2);line-height:1.4;flex:1;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nx-footer{padding:8px 10px;border-top:1px solid #1a2540;display:flex;gap:6px}
+.btn-install{flex:1;padding:6px 0;font-size:.76rem;font-weight:700;border:none;
+  border-radius:4px;cursor:pointer;transition:opacity .15s,transform .1s;
+  background:var(--blue);color:#fff}
+.btn-install.installed{background:#1a3a26;color:var(--green)}
+.btn-install.installing{background:#1a2a3a;color:var(--blue);animation:pulse .8s infinite}
+.btn-install:disabled{opacity:.4;cursor:not-allowed}
+.btn-install:active{transform:scale(.97)}
+.btn-nexus-link{padding:6px 8px;font-size:.72rem;font-weight:600;border:none;
+  border-radius:4px;cursor:pointer;background:var(--bg);color:var(--gray);
+  text-decoration:none;display:inline-flex;align-items:center;transition:color .15s}
+.btn-nexus-link:hover{color:var(--fg)}
+
+.nx-loading{text-align:center;padding:24px;color:var(--gray);font-size:.85rem}
+.nx-error{background:#2a0e0e;border:1px solid #5c1a1a;border-radius:6px;
+  padding:10px 14px;font-size:.8rem;color:var(--red);margin-bottom:10px}
+.nx-info{font-size:.72rem;color:var(--gray);margin-bottom:8px;line-height:1.5}
+.nx-drop{border:2px dashed #1a2540;border-radius:6px;padding:16px;text-align:center;
+  font-size:.78rem;color:var(--gray);margin-top:10px;transition:border-color .2s}
+.nx-drop.active{border-color:var(--blue);color:var(--blue)}
+.nx-search{width:100%;background:var(--bg3);border:1px solid #1a2540;border-radius:5px;
+  color:var(--fg);font-size:.8rem;padding:7px 10px;outline:none;margin-bottom:10px}
+.nx-search:focus{border-color:var(--blue)}
+.nx-search::placeholder{color:var(--gray)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="conn-dot" id="relay-dot"></div>
+  <h1>⚔ ZERO COMPANY — MULTIPLAYER</h1>
+  <span class="badge">HOST</span>
+</div>
+
+<div class="main">
+
+  <!-- Banner de instalação -->
+  <div class="card" id="install-banner">
+    <div class="card-bd">
+      <div id="install-dot"></div>
+      <div id="install-txt" style="font-size:.88rem;color:var(--blue)">A instalar...</div>
+    </div>
+  </div>
+
+  <!-- Gestor de Mods Nexus -->
+  <div class="card" id="nexus-card">
+    <div class="card-hd" onclick="toggleCard('nexus-card')">
+      🎮 GESTOR DE MODS (NEXUS)
+      <span class="toggle">▼</span>
+    </div>
+    <div class="card-bd">
+      <div class="nx-info">
+        Navega os top 30 mods mais endorsados. <b style="color:var(--gold)">API key gratuita obrigatória</b> —
+        obtém em <a href="https://www.nexusmods.com/users/myaccount?tab=api+access" target="_blank"
+        style="color:var(--blue)">nexusmods.com → perfil → API Keys</a>.
+        Com conta Premium faz download direto; conta grátis abre o browser — o sistema instala quando o ficheiro chegar à pasta Downloads.
+      </div>
+
+      <div class="nx-toolbar">
+        <input class="nx-key-input" id="nx-key" type="password"
+               placeholder="API key Nexus (opcional — grátis em nexusmods.com/users/myaccount)"
+               oninput="saveKey()" autocomplete="off">
+        <button class="btn-nx" id="btn-browse" onclick="browseNexus()">
+          🔍 Top 30
+        </button>
+      </div>
+
+      <input class="nx-search" id="nx-search" placeholder="Filtrar mods…"
+             oninput="filterMods()" style="display:none">
+
+      <div id="nx-error" class="nx-error" style="display:none"></div>
+      <div id="nx-loading" class="nx-loading" style="display:none">
+        ⟳ A carregar mods do Nexus…
+      </div>
+
+      <div class="nx-grid" id="nx-grid"></div>
+
+      <!-- Drop zone para instalar manualmente -->
+      <div class="nx-drop" id="nx-drop">
+        📂 Ou arrasta um ficheiro .zip/.pak aqui para instalar diretamente
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync de mods -->
+  <div class="card" id="mod-card" style="display:none">
+    <div class="card-hd" onclick="toggleCard('mod-card')">
+      🔄 SINCRONIZAÇÃO DE MODS
+      <span class="toggle">▼</span>
+    </div>
+    <div class="card-bd">
+      <div id="mod-status" style="font-size:.82rem;color:var(--fg2);margin-bottom:8px"></div>
+      <table class="mod-table" id="mod-table">
+        <thead><tr><th>Mod</th><th>Tu</th><th>Amigo</th></tr></thead>
+        <tbody id="mod-tbody"></tbody>
+      </table>
+      <button class="btn btn-green" id="btn-sync-mods" onclick="syncMods()" style="display:none">
+        ↑ SINCRONIZAR MODS — copiar para o amigo
+      </button>
+    </div>
+  </div>
+
+  <!-- Link para o amigo -->
+  <div class="card">
+    <div class="card-hd">LINK PARA O AMIGO</div>
+    <div class="card-bd">
+      <div class="share-url" id="share-url" onclick="copyUrl()">…</div>
+      <div class="hint" id="copy-hint">Clica para copiar · manda pelo WhatsApp ou Discord</div>
+    </div>
+  </div>
+
+  <!-- Jogadores -->
+  <div class="card">
+    <div class="card-hd" onclick="toggleCard('players-card')">
+      JOGADORES
+      <span class="toggle">▼</span>
+    </div>
+    <div class="card-bd" id="players-card-bd">
+      <div class="players">
+        <div class="player">
+          <div class="pdot on"></div>
+          <div>
+            <div class="p-name">Tu (host)</div>
+            <div class="p-sub" id="st-host">Conectado</div>
+          </div>
+        </div>
+        <div class="player">
+          <div class="pdot wait" id="dot-client"></div>
+          <div>
+            <div class="p-name">Amigo</div>
+            <div class="p-sub" id="st-client">Aguardando…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jogo + Explorer -->
+  <div class="card">
+    <div class="card-hd" onclick="toggleCard('game-card')">
+      JOGO
+      <span class="toggle">▼</span>
+    </div>
+    <div class="card-bd" id="game-card-bd" style="display:flex;flex-direction:column;gap:10px">
+      <div class="game-row">
+        <div class="gd" id="game-dot"></div>
+        <div class="gtxt" id="game-txt">Verificando…</div>
+      </div>
+      <button class="btn btn-blue" id="btn-explore" onclick="startExplorer()" disabled>
+        🔍  EXPLORAR JOGO — capturar classes internas
+      </button>
+      <div class="exp-result" id="exp-result"></div>
+      <div style="font-size:.75rem;color:var(--gray);line-height:1.5">
+        Deve ser feito com o jogo aberto numa missão, uma vez por sessão.
+      </div>
+    </div>
+  </div>
+
+  <!-- Divisão de personagens -->
+  <div class="card" id="split-card" style="display:none">
+    <div class="card-hd">⚔ DIVISÃO DE PERSONAGENS</div>
+    <div class="card-bd">
+      <div id="split-info" style="font-size:.82rem;color:var(--fg2);margin-bottom:10px">
+        Aguardando explorer…
+      </div>
+      <div class="split-grid">
+        <div class="split-card">
+          <div class="split-who">TU (HOST)</div>
+          <div class="split-units" id="split-host">—</div>
+          <div class="split-hint" id="split-host-hint"></div>
+        </div>
+        <div class="split-card">
+          <div class="split-who">AMIGO (CLIENT)</div>
+          <div class="split-units" id="split-client">—</div>
+          <div class="split-hint" id="split-client-hint"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <div class="card-hd">LOG</div>
+    <div class="card-bd" style="padding:8px">
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const RELAY_PORT = 8765;
+let ws = null;
+let localIp = location.hostname;
+let peerConnected = false;
+let myMods = [];
+let friendMods = [];
+let pendingSyncMods = [];
+
+// ─── Nexus state ─────────────────────────────────────────────────────────────
+let nexusMods   = [];    // lista original do Nexus
+let installedNames = new Set();   // nomes de mods instalados (locais)
+let installQueue = {};  // mod_id → { resolve }  para aguardar NEXUS_FILES
+
+// ─── Utilitários ─────────────────────────────────────────────────────────────
+function ts(){
+  const d=new Date();
+  return [d.getHours(),d.getMinutes(),d.getSeconds()]
+    .map(n=>String(n).padStart(2,'0')).join(':');
+}
+function log(msg,c=''){
+  const box=document.getElementById('log');
+  const r=document.createElement('div');
+  r.className='lr';
+  r.innerHTML=`<span class="ts">[${ts()}]</span><span class="${c?'c-'+c:''}">${msg}</span>`;
+  box.appendChild(r);
+  box.scrollTop=box.scrollHeight;
+}
+function toggleCard(cardId){
+  // para cards com card-hd clicável — toggle collapse
+  // Não se aplica a todos; cards sem id de corpo ignoram
+  const card = document.getElementById(cardId);
+  if(card) card.classList.toggle('collapsed');
+}
+
+function setGameStatus(running){
+  document.getElementById('game-dot').className='gd'+(running?' running':'');
+  document.getElementById('game-txt').textContent=running
+    ?'✓ SWZeroCompany.exe detectado':'✗ Jogo não detectado — abre o jogo';
+  document.getElementById('btn-explore').disabled=!running;
+}
+function setClientStatus(on){
+  peerConnected=on;
+  document.getElementById('dot-client').className='pdot'+(on?' on':' wait');
+  document.getElementById('st-client').textContent=on?'Conectado ✓':'Aguardando…';
+  if(on && myMods.length) sendModList();
+}
+function updateShareUrl(ip){
+  localIp=ip;
+  document.getElementById('share-url').textContent=`http://${ip}:${location.port||8766}`;
+}
+function copyUrl(){
+  const url=document.getElementById('share-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    document.getElementById('copy-hint').textContent='✓ Copiado!';
+    setTimeout(()=>document.getElementById('copy-hint').textContent=
+      'Clica para copiar · manda pelo WhatsApp ou Discord',3000);
+  });
+}
+
+// ─── Mod sync ─────────────────────────────────────────────────────────────────
+function sendModList(){
+  if(!ws||ws.readyState!==1) return;
+  ws.send(JSON.stringify({type:'MOD_LIST',mods:myMods}));
+}
+function renderModTable(hMods, cMods){
+  const all=[...new Set([...hMods,...cMods])].sort();
+  if(!all.length){ document.getElementById('mod-card').style.display='none'; return; }
+  document.getElementById('mod-card').style.display='';
+  const tb=document.getElementById('mod-tbody');
+  tb.innerHTML='';
+  const missing=[];
+  all.forEach(m=>{
+    const hHas=hMods.includes(m), cHas=cMods.includes(m);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${m}</td>
+      <td>${hHas?'<span class="badge-ok">✓</span>':'<span class="badge-miss">✗</span>'}</td>
+      <td>${cHas?'<span class="badge-ok">✓</span>':'<span class="badge-miss">✗</span>'}</td>`;
+    tb.appendChild(tr);
+    if(hHas && !cHas) missing.push(m);
+  });
+  pendingSyncMods=missing;
+  const syncBtn=document.getElementById('btn-sync-mods');
+  if(missing.length){
+    document.getElementById('mod-status').textContent=
+      `${missing.length} mod(s) em falta no amigo — clica para enviar automaticamente`;
+    syncBtn.style.display='';
+    syncBtn.textContent=`↑ ENVIAR ${missing.length} MOD(S) PARA O AMIGO`;
+  } else {
+    document.getElementById('mod-status').textContent='✓ Mods sincronizados';
+    syncBtn.style.display='none';
+  }
+}
+function syncMods(){
+  if(!ws||ws.readyState!==1) return;
+  pendingSyncMods.forEach(mod=>{
+    log(`Enviando mod: ${mod}...`,'blue');
+    ws.send(JSON.stringify({type:'MOD_SEND',mod}));
+  });
+  document.getElementById('btn-sync-mods').disabled=true;
+  document.getElementById('btn-sync-mods').textContent='A enviar…';
+}
+
+// ─── Explorer / Split ─────────────────────────────────────────────────────────
+function startExplorer(){
+  if(!ws||ws.readyState!==1){log('Não conectado.','red');return;}
+  log('Iniciando explorer…','blue');
+  document.getElementById('btn-explore').disabled=true;
+  document.getElementById('btn-explore').textContent='⟳  Explorando…';
+  ws.send(JSON.stringify({type:'EXPLORER_START'}));
+}
+function showCharSplit(split){
+  if(!split||!split.host) return;
+  document.getElementById('split-card').style.display='';
+  const pp=split.per_player||split.host.length;
+  document.getElementById('split-info').textContent=
+    `${pp} personagens por jogador · ${pp===3?'modo com mods (3+3)':'modo padrão (2+2)'}`;
+  document.getElementById('split-host').textContent=
+    'Personagens '+(split.host.map(i=>i+1).join(', '));
+  document.getElementById('split-client').textContent=
+    'Personagens '+(split.client.map(i=>i+1).join(', '));
+  document.getElementById('split-host-hint').textContent='Controlas tu';
+  document.getElementById('split-client-hint').textContent='Controla o amigo';
+}
+
+// ─── Nexus ────────────────────────────────────────────────────────────────────
+function saveKey(){
+  try{ localStorage.setItem('nx-key', document.getElementById('nx-key').value); }catch(e){}
+}
+function loadKey(){
+  try{ document.getElementById('nx-key').value = localStorage.getItem('nx-key')||''; }catch(e){}
+}
+
+function browseNexus(){
+  const btn = document.getElementById('btn-browse');
+  btn.disabled = true;
+  btn.textContent = '⟳ Carregando…';
+  document.getElementById('nx-loading').style.display='block';
+  document.getElementById('nx-error').style.display='none';
+  document.getElementById('nx-grid').innerHTML='';
+  document.getElementById('nx-search').style.display='none';
+
+  const keyEl = document.getElementById('nx-key');
+  const key = keyEl.dataset.saved === '1' ? '' : keyEl.value.trim();
+  fetch('/api/nexus/browse?key=' + encodeURIComponent(key))
+    .then(r=>r.json())
+    .then(data=>{
+      btn.disabled=false; btn.textContent='🔍 Top 30';
+      document.getElementById('nx-loading').style.display='none';
+      if(data.error){
+        let errHtml = '❌ ' + data.error.replace(/\n/g,'<br>');
+        if(data.need_key){
+          errHtml += '<br><a href="https://www.nexusmods.com/users/myaccount?tab=api+access" target="_blank" style="color:var(--blue)">→ Obtém a tua API key gratuita aqui</a>';
+        }
+        if(data.nexus_search){
+          errHtml += `<br><a href="${data.nexus_search}" target="_blank" style="color:var(--blue)">→ Pesquisar mods no Nexus</a>`;
+        }
+        document.getElementById('nx-error').innerHTML=errHtml;
+        document.getElementById('nx-error').style.display='block';
+        return;
+      }
+      nexusMods = data.mods||[];
+      if(!nexusMods.length){
+        document.getElementById('nx-error').textContent=
+          'Nenhum mod encontrado. Tenta novamente mais tarde.';
+        document.getElementById('nx-error').style.display='block';
+        return;
+      }
+      // Buscar lista de instalados
+      fetch('/api/nexus/installed')
+        .then(r=>r.json())
+        .then(inst=>{
+          const names = [...(inst.mods||[]), ...(inst.paks||[])];
+          installedNames = new Set(names.map(n=>n.toLowerCase()));
+          renderNexusGrid(nexusMods);
+          document.getElementById('nx-search').style.display='';
+          log(`✓ ${nexusMods.length} mods carregados do Nexus.`,'green');
+        })
+        .catch(()=>{ renderNexusGrid(nexusMods); });
+    })
+    .catch(e=>{
+      btn.disabled=false; btn.textContent='🔍 Top 30';
+      document.getElementById('nx-loading').style.display='none';
+      document.getElementById('nx-error').textContent='❌ Erro ao contactar servidor: '+e.message;
+      document.getElementById('nx-error').style.display='block';
+    });
+}
+
+function filterMods(){
+  const q = document.getElementById('nx-search').value.toLowerCase();
+  const filtered = q ? nexusMods.filter(m=>{
+    const name = (m.name||'').toLowerCase();
+    const desc = (m.description||m.summary||'').toLowerCase();
+    return name.includes(q)||desc.includes(q);
+  }) : nexusMods;
+  renderNexusGrid(filtered);
+}
+
+function isInstalled(mod){
+  const name = (mod.name||'').toLowerCase().replace(/\s+/g,'_');
+  const name2 = (mod.name||'').toLowerCase();
+  return installedNames.has(name) || installedNames.has(name2) ||
+    [...installedNames].some(n => n.includes(name.slice(0,8)));
+}
+
+function renderNexusGrid(mods){
+  const grid = document.getElementById('nx-grid');
+  grid.innerHTML='';
+  // Filtrar mods sem nome ou sem ID
+  mods.filter(m => m.name && (m.mod_id||m.id)).forEach(m=>{
+    const inst = isInstalled(m);
+    const card = document.createElement('div');
+    card.className = 'nx-card' + (inst?' installed':'');
+    card.id = `nx-mod-${m.mod_id}`;
+
+    const thumb = m.thumbnail_link||m.picture_url||'';
+    const thumbHtml = thumb
+      ? `<img class="nx-thumb" src="${thumb}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="nx-thumb-ph">🎮</div>`;
+
+    const endorsements = m.endorsement_count!=null
+      ? `⬆ ${Number(m.endorsement_count).toLocaleString()}` : '';
+    const rawDesc = (m.summary||m.description||'');
+    const desc = rawDesc
+      .replace(/\[\/?\w+(?:=[^\]]+)?\]/g, '')  // strip BBCode [tag] [/tag] [tag=val]
+      .replace(/<[^>]+>/g, '')                   // strip HTML tags
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 110);
+    const modId = m.mod_id||m.id;
+    const domain = m.game_name ? m.game_name.toLowerCase().replace(/\s+/g,'') : 'starwarszerocompany';
+    const nexusUrl = `https://www.nexusmods.com/${domain}/mods/${modId}`;
+
+    const btnLabel = inst ? '✓ Instalado' : '⬇ Instalar';
+    const btnCls   = inst ? 'btn-install installed' : 'btn-install';
+
+    card.innerHTML = `
+      ${thumbHtml}
+      <div class="nx-body">
+        <div class="nx-name">${m.name||'Mod'}</div>
+        <div class="nx-endorsements">${endorsements}</div>
+        <div class="nx-desc">${desc}</div>
+      </div>
+      <div class="nx-footer">
+        <button class="${btnCls}" id="btn-nx-${modId}"
+          onclick="installMod(${modId},'${escStr(m.name||'Mod')}',${inst})"
+          ${inst?'disabled':''}>
+          ${btnLabel}
+        </button>
+        <a class="btn-nexus-link" href="${nexusUrl}" target="_blank" title="Ver no Nexus">↗</a>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function escStr(s){return s.replace(/'/g,"\\'").replace(/"/g,'\\"')}
+
+function installMod(modId, modName, alreadyInstalled){
+  if(alreadyInstalled){
+    // Desinstalar
+    if(!confirm(`Desinstalar '${modName}'?`)) return;
+    uninstallMod(modName, modId);
+    return;
+  }
+  if(!ws||ws.readyState!==1){log('Relay não conectado.','red');return;}
+  const btn = document.getElementById(`btn-nx-${modId}`);
+  if(btn){ btn.className='btn-install installing'; btn.textContent='⟳ A obter ficheiros…'; btn.disabled=true; }
+
+  const keyEl2 = document.getElementById('nx-key');
+  const key = keyEl2.dataset.saved === '1' ? '' : keyEl2.value.trim();
+  // Pedir lista de ficheiros para depois instalar o main file
+  ws.send(JSON.stringify({type:'NEXUS_GET_FILES', mod_id:modId, key}));
+  installQueue[modId] = {name: modName, key};
+  log(`Obtendo ficheiros de '${modName}'…`,'blue');
+}
+
+function uninstallMod(modName, modId){
+  if(!ws||ws.readyState!==1){log('Relay não conectado.','red');return;}
+  const btn = document.getElementById(`btn-nx-${modId}`);
+  if(btn){ btn.textContent='⟳ A desinstalar…'; btn.disabled=true; }
+  ws.send(JSON.stringify({type:'NEXUS_UNINSTALL', name:modName}));
+}
+
+function onNexusFiles(modId, files){
+  const q = installQueue[modId];
+  if(!q) return;
+  delete installQueue[modId];
+
+  // Escolher o ficheiro principal (categoria 1 = main, ou maior se não)
+  const mainFiles = files.filter(f=>f.category_id===1||f.category_name==='MAIN');
+  const target = mainFiles.length ? mainFiles[0] : files[0];
+  if(!target){
+    log(`Nenhum ficheiro encontrado para mod ${modId}.`,'red');
+    const btn = document.getElementById(`btn-nx-${modId}`);
+    if(btn){ btn.className='btn-install'; btn.textContent='⬇ Instalar'; btn.disabled=false; }
+    return;
+  }
+
+  const btn = document.getElementById(`btn-nx-${modId}`);
+  if(btn){ btn.textContent='⟳ A instalar…'; }
+
+  ws.send(JSON.stringify({
+    type:'NEXUS_INSTALL',
+    mod_id: modId,
+    file_id: target.file_id||target.id,
+    name: q.name,
+    key: q.key,
+  }));
+}
+
+function markInstalled(modId, modName){
+  const btn = document.getElementById(`btn-nx-${modId}`);
+  const card = document.getElementById(`nx-mod-${modId}`);
+  if(btn){
+    btn.className='btn-install installed';
+    btn.textContent='✓ Instalado';
+    btn.disabled=false;
+    btn.setAttribute('onclick',`installMod(${modId},'${escStr(modName)}',true)`);
+  }
+  if(card) card.classList.add('installed');
+  installedNames.add(modName.toLowerCase().replace(/\s+/g,'_'));
+  myMods = [...new Set([...myMods, modName])];
+}
+
+function markUninstalled(modId, modName){
+  const btn = document.getElementById(`btn-nx-${modId}`);
+  const card = document.getElementById(`nx-mod-${modId}`);
+  if(btn){
+    btn.className='btn-install';
+    btn.textContent='⬇ Instalar';
+    btn.disabled=false;
+    btn.setAttribute('onclick',`installMod(${modId},'${escStr(modName)}',false)`);
+  }
+  if(card) card.classList.remove('installed');
+  installedNames.delete(modName.toLowerCase().replace(/\s+/g,'_'));
+  myMods = myMods.filter(m=>m!==modName);
+}
+
+function findModIdByName(name){
+  const lname = name.toLowerCase();
+  const mod = nexusMods.find(m=>(m.name||'').toLowerCase().includes(lname) ||
+    lname.includes((m.name||'').toLowerCase().slice(0,6)));
+  return mod ? mod.mod_id : null;
+}
+
+// ─── Drop zone ────────────────────────────────────────────────────────────────
+(function setupDrop(){
+  const dz = document.getElementById('nx-drop');
+  ['dragenter','dragover'].forEach(e=>{
+    dz.addEventListener(e, ev=>{ev.preventDefault(); dz.classList.add('active');});
+  });
+  ['dragleave','drop'].forEach(e=>{
+    dz.addEventListener(e, ev=>{ev.preventDefault(); dz.classList.remove('active');});
+  });
+  dz.addEventListener('drop', ev=>{
+    const files = ev.dataTransfer.files;
+    if(!files.length) return;
+    const file = files[0];
+    log(`Ficheiro solto: ${file.name} — a enviar para instalar…`,'blue');
+    const reader = new FileReader();
+    reader.onload = e=>{
+      if(!ws||ws.readyState!==1){log('Relay não ligado.','red');return;}
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result.slice(0,2*1024*1024))));
+      // Enviar apenas primeiros 2MB como amostra; server vai instalar do disco via watch_downloads
+      log('Usa a pasta Downloads ou o start.bat — arrastar não transfere o ficheiro completo.','gold');
+    };
+    reader.readAsArrayBuffer(file);
+  });
+})();
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+function connect(){
+  const h=location.hostname==='localhost'||location.hostname==='127.0.0.1'
+    ?'localhost':location.hostname;
+  ws=new WebSocket(`ws://${h}:${RELAY_PORT}`);
+
+  ws.onopen=()=>{
+    ws.send(JSON.stringify({type:'HELLO',role:'host'}));
+    document.getElementById('relay-dot').className='conn-dot ok';
+    log('Conectado ao relay.','green');
+  };
+
+  ws.onmessage=ev=>{
+    let msg; try{msg=JSON.parse(ev.data);}catch{return;}
+    switch(msg.type){
+      case 'STATE':
+        setGameStatus(msg.game_running);
+        setClientStatus(msg.friend);
+        if(msg.local_ip&&msg.local_ip!=='127.0.0.1') updateShareUrl(msg.local_ip);
+        if(msg.my_mods) myMods=msg.my_mods;
+        if(msg.char_split && msg.char_split.host) showCharSplit(msg.char_split);
+        if(msg.install_status==='running'||msg.install_status==='pending'){
+          document.getElementById('install-banner').style.display='';
+        }
+        break;
+      case 'GAME_STATUS':
+        setGameStatus(msg.running);
+        log(msg.running?'✓ Jogo iniciado.':'✗ Jogo encerrado.',msg.running?'green':'gray');
+        break;
+      case 'PEER_CONNECTED':
+        if(msg.role==='client'){
+          setClientStatus(true);
+          log('🟢 Amigo conectou!','gold');
+          if(myMods.length) sendModList();
+        }
+        break;
+      case 'PEER_DISCONNECTED':
+        if(msg.role==='client'){setClientStatus(false);log('Amigo desconectou.','red');}
+        break;
+      case 'MOD_LIST':
+        friendMods=msg.mods||[];
+        log(`Mods do amigo: ${friendMods.length}`,'blue');
+        renderModTable(myMods,friendMods);
+        break;
+      case 'MOD_SYNC_RESULT':
+        if(msg.status==='ok') log('✓ Mods iguais dos dois lados.','green');
+        break;
+      case 'EXPLORER_RESULT':{
+        const d=msg.data||{};
+        const res=document.getElementById('exp-result');
+        res.style.display='block';
+        const lines=[];
+        if(d.classes){for(const [k,v] of Object.entries(d.classes)){
+          if(k!=='units') lines.push(`${k}: ${v}`);
+        }}
+        if(d.classes&&d.classes.units)
+          lines.push(`units encontradas: ${d.classes.units.length}`);
+        res.textContent=lines.join('\n')||JSON.stringify(d,null,2).slice(0,600);
+        log('✓ Explorer concluído!','green');
+        document.getElementById('btn-explore').disabled=false;
+        document.getElementById('btn-explore').textContent='✓ EXPLORADO — clica para re-explorar';
+        if(msg.char_split) showCharSplit(msg.char_split);
+        break;
+      }
+      case 'CHAR_SPLIT':
+        showCharSplit(msg.split);
+        break;
+      case 'LOG':{
+        log(msg.msg,msg.c||'');
+        const ib=document.getElementById('install-banner');
+        const it=document.getElementById('install-txt');
+        if(msg.msg.includes('Tudo pronto')) ib.style.display='none';
+        else if(ib.style.display!=='none') it.textContent=msg.msg;
+        break;
+      }
+
+      // ─── Nexus ───────────────────────────────────────────────
+      case 'NEXUS_FILES':{
+        const files = msg.files||[];
+        onNexusFiles(msg.mod_id, files);
+        break;
+      }
+      case 'NEXUS_INSTALLED':{
+        const mname = msg.orig_name||msg.mod_name||'';
+        const mid   = findModIdByName(mname);
+        if(mid) markInstalled(mid, mname);
+        // atualizar myMods para sincronização
+        fetch('/api/nexus/installed').then(r=>r.json()).then(d=>{
+          myMods=[...(d.mods||[]),...(d.paks||[])];
+        }).catch(()=>{});
+        log(`✓ '${mname}' instalado!`,'green');
+        break;
+      }
+      case 'NEXUS_UNINSTALLED':{
+        const mname = msg.mod_name||'';
+        const mid   = findModIdByName(mname);
+        if(mid) markUninstalled(mid, mname);
+        log(`✓ '${mname}' desinstalado.`,'green');
+        break;
+      }
+      case 'NEXUS_OPEN_BROWSER':{
+        window.open(msg.url,'_blank');
+        log(`Página aberta. Clica 'Manual Download' e o ficheiro instala sozinho quando chegar à pasta Downloads.`,'gold');
+        break;
+      }
+    }
+  };
+
+  ws.onclose=()=>{
+    document.getElementById('relay-dot').className='conn-dot';
+    log('Relay desconectado. Reconectando…','gray');
+    setTimeout(connect,3000);
+  };
+  ws.onerror=()=>log('Erro no relay.','red');
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+loadKey();
+// Carregar key guardada no servidor (substitui localStorage se existir)
+fetch('/api/config').then(r=>r.json()).then(cfg=>{
+  if(cfg.has_key && !document.getElementById('nx-key').value){
+    document.getElementById('nx-key').value = '••••••••••••••••••••••••';
+    document.getElementById('nx-key').dataset.saved = '1';
+    document.getElementById('nx-key').placeholder = '✓ API key configurada';
+    document.getElementById('nx-key').style.color = 'var(--green)';
+  }
+}).catch(()=>{});
+fetch('/api/info').then(r=>r.json()).then(info=>{
+  if(info.local_ip&&info.local_ip!=='127.0.0.1') updateShareUrl(info.local_ip);
+  setGameStatus(info.game_running);
+  if(info.my_mods) myMods=info.my_mods;
+  // Construir set de instalados
+  installedNames=new Set([...(info.my_mods||[]),...(info.pak_mods||[])].map(n=>n.toLowerCase()));
+  connect();
+}).catch(()=>{
+  log('Não conseguiu contactar server.py.','red');
+  log('Corre start.bat para iniciar o servidor.','gold');
+});
+</script>
+</body>
+</html>
