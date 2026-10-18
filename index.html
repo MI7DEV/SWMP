@@ -652,8 +652,6 @@ function installMod(modId,name,btn){
       }
     })
     .catch(function(){
-      document.getElementById('install-log').innerHTML=
-        '<div class="rd">Servidor local offline. Inicia o start.bat primeiro.</div>';
       btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
       _installing.delete(modId);
     });
@@ -717,8 +715,8 @@ function renderGrid(){
         '<div class="mod-desc"></div>'+
       '</div>'+
       '<div class="mod-footer">'+
-        '<button class="install-btn'+(inst?' installed':'')+'"'+(inst?' disabled':'')+'>'+(inst?'✓ INSTALADO':'INSTALAR')+'</button>'+
-        '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">↗</a>'+
+        (_isHost ? '<button class="install-btn'+(inst?' installed':'')+'"'+(inst?' disabled':'')+'>'+(inst?'✓ INSTALADO':'INSTALAR')+'</button>' : '')+
+        '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">'+(inst?'✓ Instalado':'Ver no Nexus →')+'</a>'+
       '</div>';
 
     card.querySelector('.mod-name').textContent=m.name;
