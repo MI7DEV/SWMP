@@ -766,11 +766,23 @@ class _HTTP(BaseHTTPRequestHandler):
         if path == "/api/nexus/install-start":
             if not from_local:
                 return self._reply(403,"application/json", b'{"error":"forbidden"}')
+            # CSRF: if Origin header present it must be this server or the portal
+            _ALLOWED_ORIGINS = {
+                f"http://localhost:{HTTP_PORT}",
+                f"http://127.0.0.1:{HTTP_PORT}",
+                "https://swmp-six.vercel.app",
+            }
+            origin = self.headers.get("Origin","")
+            if origin and origin not in _ALLOWED_ORIGINS:
+                return self._reply(403,"application/json", b'{"error":"forbidden"}')
             id_str = params.get("id","0")
             if not id_str.isdigit():
                 return self._reply(400,"application/json", b'{"error":"bad id"}')
             mod_id = int(id_str)
-            mod_name = params.get("name","Mod")[:100]
+            raw_name = params.get("name","Mod")[:100]
+            mod_name = re.sub(r'[^A-Za-z0-9 _.\-]', '_', raw_name).strip('.')
+            if not mod_name:
+                return self._reply(400,"application/json", b'{"error":"bad name"}')
             if _loop is not None:
                 asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
                 return self._reply(200,"application/json", b'{"status":"started"}')
