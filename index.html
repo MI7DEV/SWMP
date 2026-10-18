@@ -163,12 +163,24 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 .btn-confirm{background:rgba(245,197,24,.15);border:1px solid var(--gold2);color:var(--gold)}
 .btn-confirm:hover{background:rgba(245,197,24,.25)}
 
-#join-screen{display:none;position:fixed;inset:0;z-index:200;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:24px;text-align:center}
+#join-screen{display:none;position:fixed;inset:0;z-index:200;background:var(--bg);align-items:center;justify-content:center;padding:16px}
 #join-screen.show{display:flex}
-.join-spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.join-title{font-family:'Orbitron',sans-serif;font-size:clamp(16px,3vw,22px);letter-spacing:.1em;color:var(--gold)}
-.join-sub{color:var(--fg2);font-size:13px}
+.jcard{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 24px;width:100%;max-width:420px}
+.jcard-title{font-family:'Orbitron',sans-serif;font-size:clamp(14px,3vw,18px);letter-spacing:.12em;color:var(--gold);margin-bottom:20px;text-align:center}
+.jsteps{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.jstep{display:flex;align-items:flex-start;gap:12px;font-size:13px}
+.jstep-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.jstep.done .jstep-icon{background:rgba(34,197,94,.2);color:var(--green);border:1px solid rgba(34,197,94,.4)}
+.jstep.active .jstep-icon{background:rgba(59,130,246,.15);color:var(--blue);border:1px solid rgba(59,130,246,.4);animation:pulse 1s infinite}
+.jstep.pending .jstep-icon{background:rgba(255,255,255,.05);color:var(--fg2);border:1px solid var(--border)}
+.jstep.error .jstep-icon{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.4)}
+.jstep-text{flex:1;line-height:1.5}
+.jstep-label{font-weight:600;color:var(--fg)}
+.jstep.pending .jstep-label{color:var(--fg2)}
+.jstep-sub{font-size:11px;color:var(--fg2);margin-top:2px}
+.jlog{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:11px;max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin-bottom:14px}
+.jlog .lg{color:var(--fg2)}.jlog .gn{color:var(--green)}.jlog .rd{color:var(--red)}.jlog .bl{color:var(--blue)}.jlog .gl{color:var(--gold)}
 
 #loading{text-align:center;padding:40px;color:var(--fg2)}
 .spinner{display:inline-block;width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
@@ -177,27 +189,36 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 <div class="stars" id="stars"></div>
 
 <div id="join-screen">
-  <div class="join-spinner" id="join-spinner"></div>
-  <div class="join-title" id="join-title">LIGANDO AO SERVIDOR</div>
-  <div class="join-sub" id="join-host-text"></div>
-  <div id="join-ts-notice" style="display:none;max-width:400px;padding:14px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:8px;font-size:12px;color:#93c5fd;line-height:1.8;text-align:left">
-    <strong style="color:#60a5fa;font-size:13px">⚠ Este servidor usa Tailscale</strong><br>
-    Para connectar pela internet precisas de:<br>
-    <strong style="color:#e2e8f0">1.</strong> Ter Tailscale instalado → <a href="https://tailscale.com/download" target="_blank" style="color:#38bdf8;text-decoration:underline">tailscale.com/download</a><br>
-    <strong style="color:#e2e8f0">2.</strong> O host tem de te <strong style="color:#fbbf24">convidar para a rede Tailscale dele</strong>:<br>
-    <span style="margin-left:12px;color:#94a3b8">→ login.tailscale.com/admin/users → "Invite users"</span><br>
-    <strong style="color:#e2e8f0">3.</strong> Aceita o convite e liga o Tailscale, depois clica de novo.<br>
-    <span style="color:#ef4444;font-size:11px;margin-top:4px;display:block">❌ Instalar Tailscale sozinho não chega — precisas de estar na rede do host!</span>
+  <div class="jcard">
+    <div class="jcard-title">⚔ A CONECTAR AO SERVIDOR</div>
+    <div class="jsteps">
+      <div class="jstep done" id="js1">
+        <div class="jstep-icon">✓</div>
+        <div class="jstep-text"><div class="jstep-label">Link recebido</div><div class="jstep-sub" id="js1-sub"></div></div>
+      </div>
+      <div class="jstep pending" id="js2">
+        <div class="jstep-icon">2</div>
+        <div class="jstep-text"><div class="jstep-label">A verificar rede</div><div class="jstep-sub" id="js2-sub">A aguardar...</div></div>
+      </div>
+      <div class="jstep pending" id="js3">
+        <div class="jstep-icon">3</div>
+        <div class="jstep-text"><div class="jstep-label">A ligar ao servidor do Anfitrião</div><div class="jstep-sub" id="js3-sub">A aguardar passo anterior...</div></div>
+      </div>
+      <div class="jstep pending" id="js4">
+        <div class="jstep-icon">4</div>
+        <div class="jstep-text"><div class="jstep-label">Pronto para jogar</div><div class="jstep-sub" id="js4-sub">A aguardar ligação...</div></div>
+      </div>
+    </div>
+    <div class="jlog" id="jlog"></div>
+    <div id="join-error-notice" style="display:none;padding:12px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:12px;color:#fca5a5;line-height:1.8;margin-bottom:12px">
+      <strong style="color:#f87171;display:block;margin-bottom:4px">Não foi possível ligar</strong>
+      <span id="join-error-detail"></span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button id="join-cancel-btn" onclick="joinCancel()" style="padding:9px 20px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;color:var(--fg2);cursor:pointer;font-size:12px">Cancelar</button>
+      <button id="join-retry-btn" onclick="joinRetry()" style="display:none;padding:9px 20px;background:rgba(245,197,24,.12);border:1px solid var(--gold2);border-radius:6px;color:var(--gold);cursor:pointer;font-size:12px">TENTAR NOVAMENTE</button>
+    </div>
   </div>
-  <div id="join-error-notice" style="display:none;max-width:400px;padding:12px 16px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:8px;font-size:12px;color:#fca5a5;line-height:1.7;text-align:left">
-    <strong style="color:#f87171">Servidor não acessível.</strong><br>
-    Verifica:<br>
-    • O host tem o start.bat a correr?<br>
-    • Estás na rede Tailscale do host? (ver aviso azul acima)<br>
-    • O IP é <span id="join-error-ip"></span>?<br>
-    <button onclick="location.reload()" style="margin-top:8px;padding:6px 14px;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.5);border-radius:4px;color:#fca5a5;cursor:pointer;font-size:11px">↩ Voltar</button>
-  </div>
-  <button id="join-cancel-btn" onclick="joinCancel()" style="margin-top:8px;padding:8px 20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#64748b;cursor:pointer;font-size:12px;display:none">Cancelar</button>
 </div>
 
 <div id="modal-overlay">
@@ -320,43 +341,93 @@ let installedMods=new Set();
 let currentFilter='all';
 let currentSort='downloads';
 
-// ── Join flow
+// ── Join flow helpers
 var _joinTimer=null;
+var _joinIpGlobal=null;
+
+function jlog(msg,cls){
+  var box=document.getElementById('jlog');
+  if(!box) return;
+  var d=document.createElement('div');d.className=cls||'lg';d.textContent=msg;
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+function jstep(n,state,sub){
+  var el=document.getElementById('js'+n);
+  if(!el) return;
+  el.className='jstep '+state;
+  el.querySelector('.jstep-icon').textContent=state==='done'?'✓':state==='error'?'✕':n;
+  if(sub!==undefined) document.getElementById('js'+n+'-sub').textContent=sub;
+}
+
 function joinCancel(){
   if(_joinTimer){ clearTimeout(_joinTimer); _joinTimer=null; }
   document.getElementById('join-screen').classList.remove('show');
-  document.getElementById('join-spinner').style.display='none';
-  document.getElementById('join-title').textContent='Cancelado';
-  document.getElementById('join-cancel-btn').style.display='none';
 }
+
+function joinRetry(){
+  if(_joinIpGlobal) startJoin(_joinIpGlobal);
+}
+
+function joinError(msg, isTailscale){
+  jstep(3,'error','Falhou');
+  jstep(4,'pending','A aguardar...');
+  document.getElementById('join-error-notice').style.display='block';
+  var detail=msg;
+  if(isTailscale){
+    detail+='<br><br><strong>Para ligar pela internet precisas de:</strong><br>'
+      +'1. O Anfitrião convidar-te: <strong>login.tailscale.com/admin/users</strong><br>'
+      +'2. Instalares o Tailscale e fazeres login<br>'
+      +'3. Teres o ícone do Tailscale a verde na barra de sistema';
+  } else {
+    detail+='<br><br>Verifica se o Anfitrião tem o start.bat a correr.';
+  }
+  document.getElementById('join-error-detail').innerHTML=detail;
+  document.getElementById('join-retry-btn').style.display='block';
+  jlog('Falha: '+msg,'rd');
+}
+
+function startJoin(ip){
+  _joinIpGlobal=ip;
+  var isTailscale=/^100\./.test(ip);
+  // Reset UI
+  document.getElementById('join-error-notice').style.display='none';
+  document.getElementById('join-retry-btn').style.display='none';
+  jstep(1,'done','IP: '+ip);
+  jstep(2,'active','A verificar...');
+  jstep(3,'pending','A aguardar...');
+  jstep(4,'pending','A aguardar...');
+  jlog('Link recebido — servidor: '+ip+':8766','gn');
+  if(isTailscale){
+    jlog('IP Tailscale (100.x.x.x) — ligação pela internet','bl');
+    jstep(2,'done','Tailscale detectado ('+ip+')');
+  } else {
+    jlog('IP local — ligação pela rede local','bl');
+    jstep(2,'done','Rede local ('+ip+')');
+  }
+  jstep(3,'active','A ligar a '+ip+':8766...');
+  jlog('A redirecionar para o servidor do Anfitrião...','lg');
+  if(_joinTimer) clearTimeout(_joinTimer);
+  _joinTimer=setTimeout(function(){
+    jlog('A abrir http://'+ip+':8766','lg');
+    jstep(3,'done','A carregar página do servidor...');
+    jstep(4,'active','A conectar...');
+    location.href='http://'+ip+':8766';
+  },2500);
+  // After 35s: if still on this page the redirect didn't work
+  setTimeout(function(){
+    if(document.getElementById('join-screen').classList.contains('show')){
+      joinError('O servidor não respondeu em '+ip+':8766', isTailscale);
+    }
+  },35000);
+}
+
 (function(){
   const p=new URLSearchParams(location.search);
   const joinIp=p.get('join');
   if(joinIp){
-    // Only allow bare IPv4 addresses to prevent open redirect
-    if(!/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(joinIp)) { location.replace(location.origin); return; }
-    const sc=document.getElementById('join-screen');
-    sc.classList.add('show');
-    document.getElementById('join-host-text').textContent='Servidor: '+joinIp+':8766';
-    document.getElementById('join-cancel-btn').style.display='block';
-    if(/^100\./.test(joinIp)) {
-      document.getElementById('join-ts-notice').style.display='block';
-    }
-    // Redirect after 4s (up from 2s) so user can read the Tailscale notice
-    _joinTimer=setTimeout(function(){
-      document.getElementById('join-host-text').textContent='A abrir servidor do host...';
-      document.getElementById('join-cancel-btn').style.display='none';
-      location.href='http://'+joinIp+':8766';
-    },4000);
-    // After 30s if still on this page (redirect timed out), show error
-    setTimeout(function(){
-      if(document.getElementById('join-screen').classList.contains('show')){
-        document.getElementById('join-spinner').style.display='none';
-        document.getElementById('join-title').textContent='SERVIDOR INACESSÍVEL';
-        document.getElementById('join-error-ip').textContent=joinIp;
-        document.getElementById('join-error-notice').style.display='block';
-      }
-    },30000);
+    if(!/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(joinIp)){ location.replace(location.origin); return; }
+    document.getElementById('join-screen').classList.add('show');
+    startJoin(joinIp);
   }
   const myIp=p.get('myip');
   if(myIp){
@@ -413,23 +484,8 @@ document.getElementById('btn-confirm').addEventListener('click',function(){
     return;
   }
   document.getElementById('modal-overlay').classList.remove('open');
-  const sc=document.getElementById('join-screen');
-  sc.classList.add('show');
-  document.getElementById('join-host-text').textContent='Servidor: '+ip+':8766';
-  document.getElementById('join-cancel-btn').style.display='block';
-  if(/^100\./.test(ip)) document.getElementById('join-ts-notice').style.display='block';
-  _joinTimer=setTimeout(function(){
-    document.getElementById('join-cancel-btn').style.display='none';
-    location.href='http://'+ip+':8766';
-  },4000);
-  setTimeout(function(){
-    if(sc.classList.contains('show')){
-      document.getElementById('join-spinner').style.display='none';
-      document.getElementById('join-title').textContent='SERVIDOR INACESSÍVEL';
-      document.getElementById('join-error-ip').textContent=ip;
-      document.getElementById('join-error-notice').style.display='block';
-    }
-  },30000);
+  document.getElementById('join-screen').classList.add('show');
+  startJoin(ip);
 });
 
 document.getElementById('modal-ip').addEventListener('keydown',function(e){
