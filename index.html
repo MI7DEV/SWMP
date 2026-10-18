@@ -462,9 +462,16 @@ function startJoin(ip){
     // If tslink in URL and IP is Tailscale range (100.x), show Tailscale auto card
     var tsJoinLink=p.get('tslink');
     if(tsJoinLink && /^100\./.test(joinIp)){
-      var ac=document.getElementById('ts-auto-card');
-      var al=document.getElementById('ts-auto-link');
-      if(ac&&al){ al.href=tsJoinLink; ac.style.display='block'; }
+      try{
+        var tsu=new URL(tsJoinLink);
+        var validTs=tsu.protocol==='https:' &&
+          /^(login\.tailscale\.com|tailscale\.com|pkgs\.tailscale\.com)$/.test(tsu.hostname);
+        if(validTs){
+          var ac=document.getElementById('ts-auto-card');
+          var al=document.getElementById('ts-auto-link');
+          if(ac&&al){ al.href=tsu.href; ac.style.display='block'; }
+        }
+      }catch(e){}
     }
     document.getElementById('join-screen').classList.add('show');
     startJoin(joinIp);
@@ -479,9 +486,16 @@ function startJoin(ip){
   }
   const tsLink=p.get('tslink');
   if(tsLink){
-    var card=document.getElementById('ts-invite-card');
-    var inp=document.getElementById('ts-invite-input');
-    if(card&&inp){ inp.value=tsLink; card.style.display='block'; }
+    try{
+      var tslU=new URL(tsLink);
+      var tslOk=tslU.protocol==='https:' &&
+        /^(login\.tailscale\.com|tailscale\.com|pkgs\.tailscale\.com)$/.test(tslU.hostname);
+      if(tslOk){
+        var card=document.getElementById('ts-invite-card');
+        var inp=document.getElementById('ts-invite-input');
+        if(card&&inp){ inp.value=tslU.href; card.style.display='block'; }
+      }
+    }catch(e){}
   }
 })();
 
