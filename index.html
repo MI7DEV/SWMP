@@ -232,7 +232,13 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     <div class="share-hint">Envie este link para o seu amigo — ele clica e conecta automaticamente.</div>
   </div>
 
-  <div id="status-panel">
+  <!-- Client mode banner (shown when server not found locally) -->
+  <div id="client-banner" style="display:none;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:14px 18px;margin-bottom:20px">
+    <div style="font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.12em;color:#60a5fa;text-transform:uppercase;margin-bottom:6px">Modo Cliente</div>
+    <div style="font-size:13px;color:var(--fg2)">Servidor local não detectado nesta máquina. Use o link enviado pelo host para conectar — ou clica em <strong style="color:var(--fg)">ENTRAR COMO CLIENTE</strong> abaixo.</div>
+  </div>
+
+  <div id="status-panel" style="display:none">
     <h3>Estado do Servidor Local</h3>
     <div class="status-grid">
       <div class="stat-card"><div class="stat-label">Servidor</div><div class="stat-value" id="stat-server">—</div></div>
@@ -346,9 +352,12 @@ document.getElementById('btn-copy-link').addEventListener('click',function(){
   btn.textContent='Copiado!';setTimeout(function(){btn.textContent='Copiar';},1800);
 });
 
-// ── Status polling
+// ── Status polling + mode detection
 var srvDot=document.getElementById('srv-dot');
 var srvLabel=document.getElementById('srv-label');
+var _modeSet=false;
+var _isHost=false;
+var _pollTimer=null;
 
 function setStatVal(id,val,cls){
   var el=document.getElementById(id);
@@ -374,11 +383,35 @@ function renderLog(log){
   el.scrollTop=el.scrollHeight;
 }
 
+function enterHostMode(){
+  if(_modeSet&&_isHost) return;
+  _modeSet=true;_isHost=true;
+  document.getElementById('status-panel').style.display='block';
+  document.getElementById('client-banner').style.display='none';
+  srvDot.className='dot green';srvLabel.textContent='Host Online';
+  // HOST button: mark as active
+  document.getElementById('btn-host').classList.add('primary');
+}
+
+function enterClientMode(){
+  if(_modeSet) return;
+  _modeSet=true;_isHost=false;
+  document.getElementById('status-panel').style.display='none';
+  document.getElementById('client-banner').style.display='block';
+  srvDot.className='dot';srvLabel.textContent='Modo Cliente';
+  // Stop polling — no server here
+  if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
+  // Highlight client button
+  document.getElementById('btn-client').classList.add('primary');
+  document.getElementById('btn-host').classList.remove('primary');
+}
+
 function pollStatus(){
   fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2500)})
     .then(function(r){return r.json();})
     .then(function(d){
-      srvDot.className='dot green';srvLabel.textContent='Online';
+      enterHostMode();
+      srvDot.className='dot green';srvLabel.textContent='Host Online';
       setStatVal('stat-server','Online','ok');
       var gf=d.game_found,gr=d.game_running;
       setStatVal('stat-game',gf?(gr?'Rodando':'Encontrado'):'Não encontrado',gf?(gr?'gold':'ok'):'bad');
@@ -391,19 +424,28 @@ function pollStatus(){
       if(d.install_log) renderLog(d.install_log);
       if(d.local_ip&&d.local_ip!=='127.0.0.1'){
         var ipIn=document.getElementById('my-ip-input');
-        if(!ipIn.value) ipIn.value=d.local_ip;
+        if(!ipIn.value){ipIn.value=d.local_ip;generateLink();}
       }
       renderGrid();
     })
     .catch(function(){
-      srvDot.className='dot red';srvLabel.textContent='Offline';
-      setStatVal('stat-server','Offline','bad');
-      setStatVal('stat-game','—','');setStatVal('stat-mods','—','');setStatVal('stat-install','—','');
+      if(!_modeSet){
+        // First failure → client mode
+        enterClientMode();
+      } else if(_isHost){
+        // Was host, lost connection
+        srvDot.className='dot red pulse';srvLabel.textContent='Reconectando...';
+        setStatVal('stat-server','Reconectando','bad');
+      }
     });
 }
 
-pollStatus();
-setInterval(pollStatus,4000);
+// First probe with short timeout to determine mode quickly
+fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(1500)})
+  .then(function(r){return r.json();}).then(function(){pollStatus();})
+  .catch(function(){enterClientMode();});
+
+_pollTimer=setInterval(pollStatus,4000);
 
 // ── Mods browser
 function stripBBCode(s){
