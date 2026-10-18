@@ -454,12 +454,24 @@ function startJoin(ip){
   document.getElementById('join-go-btn').disabled=false;
   if(_joinTimer){clearTimeout(_joinTimer);_joinTimer=null;}
 
-  // Show prominent info box immediately
+  // Strict IP validation before any DOM use
+  if(!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return;
+
+  // Show prominent info box — build with DOM APIs, no innerHTML with ip
   var infoBox=document.getElementById('jinfo-box');
   var tsBox=document.getElementById('jinfo-ts');
   infoBox.style.display='block';
-  infoBox.innerHTML='<strong>Servidor do Anfitrião:</strong> <code style="color:var(--gold)">http://'+ip+':8766</code><br>'
-    +'<strong>Relay WebSocket:</strong> <code style="color:var(--gold)">ws://'+ip+':8765</code>';
+  infoBox.innerHTML='';
+  (function(){
+    var frag=document.createDocumentFragment();
+    var s1=document.createElement('strong');s1.textContent='Servidor do Anfitrião: ';
+    var c1=document.createElement('code');c1.style.color='var(--gold)';c1.textContent='http://'+ip+':8766';
+    var br=document.createElement('br');
+    var s2=document.createElement('strong');s2.textContent='Relay WebSocket: ';
+    var c2=document.createElement('code');c2.style.color='var(--gold)';c2.textContent='ws://'+ip+':8765';
+    frag.appendChild(s1);frag.appendChild(c1);frag.appendChild(br);frag.appendChild(s2);frag.appendChild(c2);
+    infoBox.appendChild(frag);
+  })();
 
   if(isTailscale){
     tsBox.style.display='block';
