@@ -712,7 +712,7 @@ function doSelfHeal(){
   var el=document.getElementById('conn-log');
   var d=document.createElement('div');d.className='gl';d.textContent='['+new Date().toTimeString().slice(0,8)+'] A executar self-heal...';
   el.appendChild(d);el.scrollTop=el.scrollHeight;
-  fetch(LOCAL+'/api/self-heal',{method:'GET',signal:AbortSignal.timeout(15000)})
+  fetch(LOCAL+'/api/self-heal',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},signal:AbortSignal.timeout(15000)})
     .then(function(r){return r.json();})
     .then(function(data){
       (data.results||[]).forEach(function(msg){
@@ -730,7 +730,13 @@ function doSelfHeal(){
       _lastConnLogLen=0; // force re-render of conn-log
     })
     .catch(function(e){
-      var d3=document.createElement('div');d3.className='rd';d3.textContent='  Erro: '+e.message;
+      var msg=e.message||'';
+      var d3=document.createElement('div');d3.className='rd';
+      if(msg.indexOf('DOCTYPE')>=0||msg.indexOf('JSON')>=0||msg.indexOf('token')>=0){
+        d3.textContent='  Servidor desatualizado — reinicia o start.bat uma vez para aplicar as novas funcionalidades. Depois fica automático.';
+      } else {
+        d3.textContent='  Erro: '+msg;
+      }
       el.appendChild(d3);el.scrollTop=el.scrollHeight;
       btn.disabled=false; btn.textContent='⟳ REINICIAR SISTEMA';
     });

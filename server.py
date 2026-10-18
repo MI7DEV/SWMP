@@ -790,45 +790,9 @@ class _HTTP(BaseHTTPRequestHandler):
             body = json.dumps(info).encode()
             return self._reply(200,"application/json", body)
 
+        # self-heal moved to do_POST — reject GET attempts
         if path == "/api/self-heal":
-            if not from_local:
-                return self._reply(403,"application/json", b'{"error":"forbidden"}')
-            results = []
-            # 1. Re-apply Windows Firewall rules
-            try:
-                subprocess.run(
-                    ["netsh","advfirewall","firewall","delete","rule","name=ZeroCompanyMP"],
-                    capture_output=True, timeout=10)
-                r = subprocess.run(
-                    ["netsh","advfirewall","firewall","add","rule",
-                     "name=ZeroCompanyMP","dir=in","action=allow",
-                     "protocol=TCP","localport=8765-8766","profile=any"],
-                    capture_output=True, timeout=10)
-                ok_fw = r.returncode == 0
-                results.append(f"Firewall: {'OK portas 8765-8766 abertas' if ok_fw else 'AVISO sem permissão admin'}")
-                conn_log_add(f"[SERV] self-heal: firewall {'OK' if ok_fw else 'falhou'}", "green" if ok_fw else "gold")
-            except Exception as e:
-                results.append(f"Firewall: erro ({e})")
-            # 2. Re-detect Tailscale IP
-            old_ts = _tailscale_ip
-            new_ts = detect_tailscale_ip()
-            if new_ts:
-                results.append(f"Tailscale: {new_ts}")
-                conn_log_add(f"[SERV] self-heal: Tailscale IP {new_ts}", "green")
-            else:
-                results.append("Tailscale: não conectado")
-                conn_log_add("[SERV] self-heal: Tailscale não conectado", "gold")
-            # 3. Re-open portal in browser
-            portal_ip = new_ts or _local_ip
-            portal_url = f"https://swmp-six.vercel.app/?myip={portal_ip}"
-            try:
-                import webbrowser
-                webbrowser.open(portal_url)
-                results.append(f"Portal: a abrir {portal_url}")
-            except Exception as e:
-                results.append(f"Portal: erro ao abrir ({e})")
-            body = json.dumps({"status":"ok","results":results,"tailscale_ip":new_ts,"local_ip":_local_ip}).encode()
-            return self._reply(200,"application/json", body)
+            return self._reply(405,"application/json", b'{"error":"use POST"}')
 
         if path == "/api/config":
             cfg = _load_config()
@@ -976,6 +940,49 @@ class _HTTP(BaseHTTPRequestHandler):
                 asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
                 return self._reply(200, "application/json", b'{"status":"started"}', acao)
             return self._reply(503, "application/json", b'{"error":"loop not ready"}', acao)
+
+        if path == "/api/self-heal":
+            if not from_local:
+                return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
+            if not self._host_ok():
+                return self._reply(421, "application/json", b'{"error":"bad host"}', acao)
+            results = []
+            # 1. Re-apply Windows Firewall rules (private+domain, Tailscale+LAN only)
+            try:
+                subprocess.run(
+                    ["netsh","advfirewall","firewall","delete","rule","name=ZeroCompanyMP"],
+                    capture_output=True, timeout=10)
+                r = subprocess.run(
+                    ["netsh","advfirewall","firewall","add","rule",
+                     "name=ZeroCompanyMP","dir=in","action=allow",
+                     "protocol=TCP","localport=8765-8766",
+                     "profile=private,domain",
+                     "remoteip=LocalSubnet,100.64.0.0/10"],
+                    capture_output=True, timeout=10)
+                ok_fw = r.returncode == 0
+                results.append(f"Firewall: {'OK portas 8765-8766 (rede local + Tailscale)' if ok_fw else 'AVISO precisa de admin'}")
+                conn_log_add(f"[SERV] self-heal: firewall {'OK' if ok_fw else 'falhou'}", "green" if ok_fw else "gold")
+            except Exception as e:
+                results.append(f"Firewall: erro ({e})")
+            # 2. Re-detect Tailscale IP
+            new_ts = detect_tailscale_ip()
+            if new_ts:
+                results.append(f"Tailscale: {new_ts}")
+                conn_log_add(f"[SERV] self-heal: Tailscale {new_ts}", "green")
+            else:
+                results.append("Tailscale: não conectado")
+                conn_log_add("[SERV] self-heal: Tailscale não conectado", "gold")
+            # 3. Re-open portal in browser
+            portal_ip = new_ts or _local_ip
+            portal_url = f"https://swmp-six.vercel.app/?myip={portal_ip}"
+            try:
+                import webbrowser
+                webbrowser.open(portal_url)
+                results.append(f"Portal: a reabrir")
+            except Exception as e:
+                results.append(f"Portal: erro ({e})")
+            body = json.dumps({"status":"ok","results":results,"tailscale_ip":new_ts,"local_ip":_local_ip}).encode()
+            return self._reply(200, "application/json", body, acao)
 
         self._reply(404, "application/json", b'{"error":"not found"}', acao)
 
