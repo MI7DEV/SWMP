@@ -820,7 +820,7 @@ class _HTTP(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", origin)
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
         self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
 
@@ -849,7 +849,13 @@ class _HTTP(BaseHTTPRequestHandler):
         if path == "/api/nexus/install-start":
             if not from_local:
                 return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
-            if not self._origin_ok():
+            # Require custom header — forces CORS preflight on cross-origin callers.
+            # Browsers never send X-Requested-With automatically (forms, img, etc.)
+            if self.headers.get("X-Requested-With","") != "XMLHttpRequest":
+                return self._reply(403, "application/json", b'{"error":"missing header"}', acao)
+            # Origin, if present, must be in allowlist (blocks DNS rebinding)
+            origin = self.headers.get("Origin","")
+            if origin and origin not in self._SAFE_ORIGINS:
                 return self._reply(403, "application/json", b'{"error":"bad origin"}', acao)
             if not self._host_ok():
                 return self._reply(421, "application/json", b'{"error":"bad host"}', acao)
