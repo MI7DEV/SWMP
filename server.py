@@ -365,11 +365,14 @@ def _extract_zip(data: bytes, mod_name: str) -> str:
                 mod_dst_resolved = mod_dst.resolve()
                 for member in names:
                     rel = member[len(prefix):]
-                    if not rel or rel.endswith("/"):
+                    # Reject absolute paths, '..' traversal and directory entries
+                    if not rel or rel.endswith("/") or ".." in rel.split("/"):
                         continue
                     dst = (mod_dst / rel).resolve()
-                    # Zip Slip protection: reject paths escaping mod_dst
-                    if not str(dst).startswith(str(mod_dst_resolved)):
+                    # Zip Slip protection: must be a descendant of mod_dst
+                    try:
+                        dst.relative_to(mod_dst_resolved)
+                    except ValueError:
                         continue
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     with z.open(member) as src, open(dst, "wb") as out:
@@ -394,18 +397,17 @@ def _install_from_bytes(data: bytes, name: str) -> str:
     raise RuntimeError("Formato não suportado. Instala manualmente via Vortex/MO2.")
 
 def _uninstall_mod(mod_name: str) -> bool:
-    # Validate: name must be safe (no path separators, no ..)
+    # Strict name validation: only alphanumeric, underscore, hyphen; no path chars
     safe = _safe_name(mod_name)
-    if not safe or safe != mod_name.replace(" ", "_"):
-        safe = _safe_name(mod_name)
+    if not safe or not re.fullmatch(r'[A-Za-z0-9_\-]+', safe):
+        return False
     removed = False
     # Lua mod
     if MODS_DIR:
-        mod_path = MODS_DIR / safe
-        # Path traversal guard: confirm path stays inside MODS_DIR
-        try:
-            mod_path.resolve().relative_to(MODS_DIR.resolve())
-        except ValueError:
+        base = MODS_DIR.resolve()
+        mod_path = (MODS_DIR / safe).resolve()
+        # Must be a direct child of MODS_DIR — no subdirectory traversal
+        if mod_path.parent != base:
             return False
         if mod_path.exists() and mod_path.is_dir():
             shutil.rmtree(mod_path); removed = True
@@ -414,10 +416,12 @@ def _uninstall_mod(mod_name: str) -> bool:
             lines = [l for l in mods_txt.read_text(encoding="utf-8").splitlines()
                      if not l.strip().startswith(safe)]
             mods_txt.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # pak mod — only match exact safe name prefix
+    # pak mod — only match exact safe name prefix, files only
     if PAK_DIR and safe:
+        pak_base = PAK_DIR.resolve()
         for pak in PAK_DIR.glob(f"{safe}*"):
-            if pak.is_file(): pak.unlink(); removed = True
+            if pak.is_file() and pak.resolve().parent == pak_base:
+                pak.unlink(); removed = True
     return removed
 
 async def _nx_install_ws(ws, mod_id: int, mod_name: str,
