@@ -101,6 +101,8 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 .stat-card{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.05);border-radius:6px;padding:10px 14px}
 .stat-label{font-size:10px;letter-spacing:.1em;color:var(--fg2);text-transform:uppercase;margin-bottom:4px}
 .stat-value{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--fg)}
+.stat-value.running{animation:running-pulse 1.2s infinite alternate}
+@keyframes running-pulse{from{opacity:1}to{opacity:.4}}
 .stat-value.ok{color:var(--green)}.stat-value.bad{color:var(--red)}.stat-value.gold{color:var(--gold)}
 .install-log{
   background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06);border-radius:6px;
@@ -250,7 +252,9 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
   <div id="status-panel" style="display:none">
     <h3>Estado do Servidor Local</h3>
     <div class="status-grid">
-      <div class="stat-card"><div class="stat-label">Servidor</div><div class="stat-value" id="stat-server">—</div></div>
+      <div class="stat-card"><div class="stat-label">Servidor HTTP</div><div class="stat-value" id="stat-server">—</div></div>
+      <div class="stat-card"><div class="stat-label">Relay WebSocket</div><div class="stat-value" id="stat-relay">—</div></div>
+      <div class="stat-card"><div class="stat-label">Amigo</div><div class="stat-value" id="stat-friend">—</div></div>
       <div class="stat-card"><div class="stat-label">Jogo</div><div class="stat-value" id="stat-game">—</div></div>
       <div class="stat-card"><div class="stat-label">Mods instalados</div><div class="stat-value gold" id="stat-mods">—</div></div>
       <div class="stat-card"><div class="stat-label">Instalação</div><div class="stat-value" id="stat-install">—</div></div>
@@ -432,13 +436,20 @@ function pollStatus(){
       enterHostMode();
       srvDot.className='dot green';srvLabel.textContent='Host Online';
       setStatVal('stat-server','Online','ok');
+      setStatVal('stat-relay','Porta 8765','ok');
+      var wsc=d.ws_clients||[];
+      var friendConn=wsc.indexOf('client')>=0;
+      setStatVal('stat-friend',friendConn?'Conectado ✓':'Aguardando...',friendConn?'ok':'');
+      if(friendConn) document.getElementById('stat-friend').style.animation='none';
+      else document.getElementById('stat-friend').style.animation='running-pulse 2s infinite alternate';
       var gf=d.game_found,gr=d.game_running;
       setStatVal('stat-game',gf?(gr?'Rodando':'Encontrado'):'Não encontrado',gf?(gr?'gold':'ok'):'bad');
       var modsArr=(d.my_mods||[]).concat(d.pak_mods||[]);
       setStatVal('stat-mods',modsArr.length,'gold');
       var ist=d.install_status||'';
-      var istMap={done:'Concluída',running:'Em progresso',failed:'Falhou',pending:'Aguardando',not_needed:'OK'};
-      setStatVal('stat-install',istMap[ist]||ist,ist==='done'?'ok':ist==='failed'?'bad':'');
+      var istMap={done:'Concluída',running:'A instalar...',failed:'Falhou',pending:'Aguardando',not_needed:'OK'};
+      var istCls=ist==='done'?'ok':ist==='failed'?'bad':ist==='running'?'running':'';
+      setStatVal('stat-install',istMap[ist]||ist,istCls);
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
       var ipIn=document.getElementById('my-ip-input');
