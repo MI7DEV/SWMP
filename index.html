@@ -229,9 +229,10 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <strong style="color:#f87171;display:block;margin-bottom:4px">Não foi possível ligar</strong>
       <span id="join-error-detail"></span>
     </div>
-    <div style="display:flex;gap:8px;justify-content:center">
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
       <button id="join-cancel-btn" onclick="joinCancel()" style="padding:9px 20px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;color:var(--fg2);cursor:pointer;font-size:12px">Cancelar</button>
-      <button id="join-retry-btn" onclick="joinRetry()" style="display:none;padding:9px 20px;background:rgba(245,197,24,.12);border:1px solid var(--gold2);border-radius:6px;color:var(--gold);cursor:pointer;font-size:12px">TENTAR NOVAMENTE</button>
+      <button id="join-go-btn" onclick="doJoinGo()" style="display:none;padding:9px 24px;background:rgba(245,197,24,.15);border:1px solid var(--gold2);border-radius:6px;color:var(--gold);cursor:pointer;font-size:13px;font-weight:700;letter-spacing:.04em">⚔ ENTRAR NO SERVIDOR</button>
+      <button id="join-retry-btn" onclick="joinRetry()" style="display:none;padding:9px 20px;background:rgba(245,197,24,.12);border:1px solid var(--gold2);border-radius:6px;color:var(--gold);cursor:pointer;font-size:12px">↺ TENTAR NOVAMENTE</button>
     </div>
   </div>
 </div>
@@ -419,39 +420,50 @@ function joinError(msg, isTailscale){
   jlog('Falha: '+msg,'rd');
 }
 
+function doJoinGo(){
+  var ip=_joinIpGlobal;
+  if(!ip) return;
+  jstep(3,'done','A abrir http://'+ip+':8766...');
+  jstep(4,'active','A conectar ao relay WebSocket...');
+  jlog('A navegar para http://'+ip+':8766','lg');
+  jlog('Se o browser mostrar erro: volta aqui (botão Voltar) e verifica o log','gl');
+  document.getElementById('join-go-btn').disabled=true;
+  setTimeout(function(){ location.href='http://'+ip+':8766'; }, 300);
+}
+
 function startJoin(ip){
   _joinIpGlobal=ip;
   var isTailscale=/^100\./.test(ip);
   // Reset UI
   document.getElementById('join-error-notice').style.display='none';
   document.getElementById('join-retry-btn').style.display='none';
+  document.getElementById('join-go-btn').style.display='none';
+  document.getElementById('join-go-btn').disabled=false;
+  if(_joinTimer){clearTimeout(_joinTimer);_joinTimer=null;}
   jstep(1,'done','IP: '+ip);
-  jstep(2,'active','A verificar...');
   jstep(3,'pending','A aguardar...');
   jstep(4,'pending','A aguardar...');
-  jlog('Link recebido — servidor: '+ip+':8766','gn');
+  jlog('Link recebido — servidor: '+ip,'gn');
   if(isTailscale){
-    jlog('IP Tailscale (100.x.x.x) — ligação pela internet','bl');
-    jstep(2,'done','Tailscale detectado ('+ip+')');
+    jstep(2,'done','Tailscale (internet) — '+ip);
+    jlog('IP Tailscale detectado (100.x) — ligação pelo Tailscale','bl');
+    jlog('Confirma: Tailscale está activo e verde no teu PC?','gl');
   } else {
-    jlog('IP local — ligação pela rede local','bl');
-    jstep(2,'done','Rede local ('+ip+')');
+    jstep(2,'done','Rede local — '+ip);
+    jlog('IP local — certifica-te que estás na mesma rede que o Anfitrião','bl');
   }
-  jstep(3,'active','A ligar a '+ip+':8766...');
-  jlog('A redirecionar para o servidor do Anfitrião...','lg');
-  if(_joinTimer) clearTimeout(_joinTimer);
+  jlog('Servidor do Anfitrião: http://'+ip+':8766 — porta '+ip+':8765 (relay)','lg');
+  jstep(3,'active','Pronto — clica ⚔ ENTRAR NO SERVIDOR');
+  document.getElementById('join-go-btn').style.display='block';
+  document.getElementById('join-go-btn').textContent='⚔ ENTRAR NO SERVIDOR ('+ip+')';
+  // Fallback: if user never clicks and stays here 90s, show timeout
   _joinTimer=setTimeout(function(){
-    jlog('A abrir http://'+ip+':8766','lg');
-    jstep(3,'done','A carregar página do servidor...');
-    jstep(4,'active','A conectar...');
-    location.href='http://'+ip+':8766';
-  },2500);
-  // After 35s: if still on this page the redirect didn't work
-  setTimeout(function(){
-    if(document.getElementById('join-screen').classList.contains('show')){
-      joinError('O servidor não respondeu em '+ip+':8766', isTailscale);
+    if(document.getElementById('join-screen').classList.contains('show')
+       && !document.getElementById('join-go-btn').disabled){
+      jlog('90s sem clicar. A tentar ligar automaticamente...','gl');
+      doJoinGo();
     }
-  },35000);
+  },90000);
 }
 
 (function(){
