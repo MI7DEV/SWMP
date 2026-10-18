@@ -374,12 +374,14 @@ function joinError(msg, isTailscale){
   document.getElementById('join-error-notice').style.display='block';
   var detail=msg;
   if(isTailscale){
-    detail+='<br><br><strong>Para ligar pela internet precisas de:</strong><br>'
-      +'1. O Anfitrião convidar-te: <strong>login.tailscale.com/admin/users</strong><br>'
-      +'2. Instalares o Tailscale e fazeres login<br>'
-      +'3. Teres o ícone do Tailscale a verde na barra de sistema';
+    detail+='<br><br><strong>Causa mais provável — Firewall do Anfitrião:</strong><br>'
+      +'→ O Anfitrião deve <strong>fechar e correr o start.bat novamente</strong> (abre as portas automaticamente).<br><br>'
+      +'<strong>Se o erro persistir — Tailscale:</strong><br>'
+      +'1. O Anfitrião vai a <strong>login.tailscale.com/admin/users</strong> → "Invite users" → coloca o teu email<br>'
+      +'2. Aceitas o convite e fazes login no Tailscale<br>'
+      +'3. O ícone do Tailscale fica verde → então tenta de novo';
   } else {
-    detail+='<br><br>Verifica se o Anfitrião tem o start.bat a correr.';
+    detail+='<br><br>Verifica se o Anfitrião tem o start.bat a correr e se estão na mesma rede Wi-Fi.';
   }
   document.getElementById('join-error-detail').innerHTML=detail;
   document.getElementById('join-retry-btn').style.display='block';
