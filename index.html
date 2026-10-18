@@ -187,8 +187,12 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 .jstep-label{font-weight:600;color:var(--fg)}
 .jstep.pending .jstep-label{color:var(--fg2)}
 .jstep-sub{font-size:11px;color:var(--fg2);margin-top:2px}
-.jlog{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:11px;max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin-bottom:14px}
+.jlog{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:11px;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin-bottom:14px}
 .jlog .lg{color:var(--fg2)}.jlog .gn{color:var(--green)}.jlog .rd{color:var(--red)}.jlog .bl{color:var(--blue)}.jlog .gl{color:var(--gold)}
+.jinfo-box{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--fg2);line-height:1.7}
+.jinfo-box strong{color:var(--fg)}
+.jinfo-ts{background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--fg2);line-height:1.7}
+.jinfo-ts strong{color:var(--gold)}
 
 #loading{text-align:center;padding:40px;color:var(--fg2)}
 .spinner{display:inline-block;width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
@@ -199,6 +203,9 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 <div id="join-screen">
   <div class="jcard">
     <div class="jcard-title">⚔ A CONECTAR AO SERVIDOR</div>
+    <!-- Info box: shown immediately with all diagnostic info -->
+    <div id="jinfo-box" class="jinfo-box" style="display:none"></div>
+    <div id="jinfo-ts" class="jinfo-ts" style="display:none"></div>
     <div class="jsteps">
       <div class="jstep done" id="js1">
         <div class="jstep-icon">✓</div>
@@ -210,13 +217,14 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       </div>
       <div class="jstep pending" id="js3">
         <div class="jstep-icon">3</div>
-        <div class="jstep-text"><div class="jstep-label">A ligar ao servidor do Anfitrião</div><div class="jstep-sub" id="js3-sub">A aguardar passo anterior...</div></div>
+        <div class="jstep-text"><div class="jstep-label">Ligar ao servidor</div><div class="jstep-sub" id="js3-sub">Clica o botão abaixo</div></div>
       </div>
       <div class="jstep pending" id="js4">
         <div class="jstep-icon">4</div>
         <div class="jstep-text"><div class="jstep-label">Pronto para jogar</div><div class="jstep-sub" id="js4-sub">A aguardar ligação...</div></div>
       </div>
     </div>
+    <div style="font-size:10px;color:var(--fg2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Log de diagnóstico</div>
     <div class="jlog" id="jlog"></div>
     <!-- Auto Tailscale install card (shown when tslink in URL and Tailscale IP detected) -->
     <div id="ts-auto-card" style="display:none;padding:12px 14px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.3);border-radius:8px;font-size:12px;margin-bottom:12px">
@@ -329,6 +337,9 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       </div>
       <div id="conn-log"><span class="lg">Aguardando eventos de ligação...</span></div>
     </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btn-self-heal" onclick="doSelfHeal()" style="flex:1;padding:10px 16px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.35);border-radius:6px;color:var(--gold);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.1em;cursor:pointer;text-transform:uppercase">⟳ REINICIAR SISTEMA</button>
+    </div>
   </div>
 
   <div id="mods-section">
@@ -423,12 +434,14 @@ function joinError(msg, isTailscale){
 function doJoinGo(){
   var ip=_joinIpGlobal;
   if(!ip) return;
+  var ts=new Date().toTimeString().slice(0,8);
   jstep(3,'done','A abrir http://'+ip+':8766...');
-  jstep(4,'active','A conectar ao relay WebSocket...');
-  jlog('A navegar para http://'+ip+':8766','lg');
-  jlog('Se o browser mostrar erro: volta aqui (botão Voltar) e verifica o log','gl');
+  jstep(4,'active','A conectar...');
+  jlog('['+ts+'] A navegar para http://'+ip+':8766','bl');
+  jlog('['+ts+'] Se o browser mostrar erro — pressiona Voltar e verifica o log acima','gl');
   document.getElementById('join-go-btn').disabled=true;
-  setTimeout(function(){ location.href='http://'+ip+':8766'; }, 300);
+  if(_joinTimer){clearTimeout(_joinTimer);_joinTimer=null;}
+  setTimeout(function(){ location.href='http://'+ip+':8766'; }, 400);
 }
 
 function startJoin(ip){
@@ -440,30 +453,49 @@ function startJoin(ip){
   document.getElementById('join-go-btn').style.display='none';
   document.getElementById('join-go-btn').disabled=false;
   if(_joinTimer){clearTimeout(_joinTimer);_joinTimer=null;}
+
+  // Show prominent info box immediately
+  var infoBox=document.getElementById('jinfo-box');
+  var tsBox=document.getElementById('jinfo-ts');
+  infoBox.style.display='block';
+  infoBox.innerHTML='<strong>Servidor do Anfitrião:</strong> <code style="color:var(--gold)">http://'+ip+':8766</code><br>'
+    +'<strong>Relay WebSocket:</strong> <code style="color:var(--gold)">ws://'+ip+':8765</code>';
+
+  if(isTailscale){
+    tsBox.style.display='block';
+    tsBox.innerHTML='<strong>⚠ Ligação pela internet (Tailscale)</strong><br>'
+      +'Antes de clicar confirma:<br>'
+      +'1. Tailscale está instalado e o ícone está <strong>verde</strong><br>'
+      +'2. Estás ligado à rede do Anfitrião (pergunta ao Anfitrião se te convidou)';
+  } else {
+    tsBox.style.display='none';
+  }
+
   jstep(1,'done','IP: '+ip);
   jstep(3,'pending','A aguardar...');
   jstep(4,'pending','A aguardar...');
-  jlog('Link recebido — servidor: '+ip,'gn');
+  var ts=new Date().toTimeString().slice(0,8);
+  jlog('['+ts+'] Link recebido — '+ip,'gn');
   if(isTailscale){
     jstep(2,'done','Tailscale (internet) — '+ip);
-    jlog('IP Tailscale detectado (100.x) — ligação pelo Tailscale','bl');
-    jlog('Confirma: Tailscale está activo e verde no teu PC?','gl');
+    jlog('['+ts+'] IP Tailscale (100.x) detectado','bl');
   } else {
     jstep(2,'done','Rede local — '+ip);
-    jlog('IP local — certifica-te que estás na mesma rede que o Anfitrião','bl');
+    jlog('['+ts+'] IP local detectado','bl');
   }
-  jlog('Servidor do Anfitrião: http://'+ip+':8766 — porta '+ip+':8765 (relay)','lg');
-  jstep(3,'active','Pronto — clica ⚔ ENTRAR NO SERVIDOR');
+  jlog('['+ts+'] Aguardando clique para conectar...','lg');
+  jstep(3,'active','Clica ⚔ ENTRAR NO SERVIDOR abaixo');
   document.getElementById('join-go-btn').style.display='block';
-  document.getElementById('join-go-btn').textContent='⚔ ENTRAR NO SERVIDOR ('+ip+')';
-  // Fallback: if user never clicks and stays here 90s, show timeout
+  document.getElementById('join-go-btn').textContent='⚔ ENTRAR NO SERVIDOR';
+
+  // Fallback: auto-connect after 60s if user hasn't clicked
   _joinTimer=setTimeout(function(){
     if(document.getElementById('join-screen').classList.contains('show')
        && !document.getElementById('join-go-btn').disabled){
-      jlog('90s sem clicar. A tentar ligar automaticamente...','gl');
+      jlog('[auto] 60s sem clicar — ligando automaticamente...','gl');
       doJoinGo();
     }
-  },90000);
+  },60000);
 }
 
 (function(){
@@ -660,6 +692,36 @@ function renderConnLog(log){
     el.appendChild(d);
   }
   el.scrollTop=el.scrollHeight;
+}
+
+function doSelfHeal(){
+  var btn=document.getElementById('btn-self-heal');
+  btn.disabled=true; btn.textContent='A reiniciar...';
+  var el=document.getElementById('conn-log');
+  var d=document.createElement('div');d.className='gl';d.textContent='['+new Date().toTimeString().slice(0,8)+'] A executar self-heal...';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+  fetch(LOCAL+'/api/self-heal',{method:'GET',signal:AbortSignal.timeout(15000)})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      (data.results||[]).forEach(function(msg){
+        var d2=document.createElement('div');d2.className='gl';d2.textContent='  '+msg;
+        el.appendChild(d2);
+      });
+      el.scrollTop=el.scrollHeight;
+      // Update IP if Tailscale reconnected
+      if(data.tailscale_ip){
+        var ipIn=document.getElementById('my-ip-input');
+        if(ipIn.value!==data.tailscale_ip){ ipIn.value=data.tailscale_ip; generateLink(); }
+        document.getElementById('ts-badge').style.display='flex';
+      }
+      btn.disabled=false; btn.textContent='⟳ REINICIAR SISTEMA';
+      _lastConnLogLen=0; // force re-render of conn-log
+    })
+    .catch(function(e){
+      var d3=document.createElement('div');d3.className='rd';d3.textContent='  Erro: '+e.message;
+      el.appendChild(d3);el.scrollTop=el.scrollHeight;
+      btn.disabled=false; btn.textContent='⟳ REINICIAR SISTEMA';
+    });
 }
 
 function diagCopy(){
