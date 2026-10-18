@@ -202,9 +202,9 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 
 <div id="modal-overlay">
   <div class="modal">
-    <h2>Entrar como Cliente</h2>
-    <label>IP do servidor (fornecido pelo host)</label>
-    <input type="text" id="modal-ip" placeholder="192.168.1.100" autocomplete="off">
+    <h2>Sou o Convidado</h2>
+    <label>Cole o link que o Anfitrião te enviou</label>
+    <input type="text" id="modal-ip" placeholder="https://swmp-six.vercel.app/?join=..." autocomplete="off">
     <div class="modal-btns">
       <button class="btn-cancel" id="btn-cancel">Cancelar</button>
       <button class="btn-confirm" id="btn-confirm">Conectar</button>
@@ -227,14 +227,14 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 <main>
   <div class="action-row">
     <button class="action-btn primary" id="btn-host">
-      <div class="btn-icon">🎮</div>
-      <div class="btn-label">HOSTEAR</div>
-      <div class="btn-desc">Abre o painel do host e gera link para convidar amigos</div>
+      <div class="btn-icon">⚔</div>
+      <div class="btn-label">SOU O ANFITRIÃO</div>
+      <div class="btn-desc">Tenho o jogo instalado e vou hospedar a sessão</div>
     </button>
     <button class="action-btn" id="btn-client">
       <div class="btn-icon">👥</div>
-      <div class="btn-label">ENTRAR COMO CLIENTE</div>
-      <div class="btn-desc">Conecta ao servidor de um amigo via IP ou link de convite</div>
+      <div class="btn-label">SOU O CONVIDADO</div>
+      <div class="btn-desc">Recebi um link do anfitrião e quero entrar na sessão</div>
     </button>
   </div>
 
@@ -252,7 +252,10 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <input type="text" id="share-link-input" readonly>
       <button class="copy-btn" id="btn-copy-link">Copiar</button>
     </div>
-    <div class="share-hint">Envie este link para o seu amigo — ele clica e conecta automaticamente.</div>
+    <div class="share-hint">Envia este link para o Convidado — ele clica e conecta automaticamente.</div>
+    <div id="host-conn-status" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:#4ade80">
+      <span id="host-conn-text">Aguardando Convidado...</span>
+    </div>
   </div>
 
   <!-- Client mode banner (shown when server not found locally) -->
@@ -282,6 +285,19 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <button class="filter-btn" data-filter="installed">Instalados</button>
       <button class="filter-btn" data-filter="not_installed">Não instalados</button>
     </div>
+    <div class="filter-row" style="margin-top:-8px">
+      <span style="font-size:11px;color:var(--fg2);align-self:center">Ordenar:</span>
+      <button class="filter-btn active" data-sort="downloads">⬇ Mais baixados</button>
+      <button class="filter-btn" data-sort="endorsements">⬆ Mais votados</button>
+      <button class="filter-btn" data-sort="name">A–Z</button>
+      <select id="limit-select" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;color:var(--fg2);font-size:12px;cursor:pointer">
+        <option value="0">Todos</option>
+        <option value="5">Top 5</option>
+        <option value="10" selected>Top 10</option>
+        <option value="25">Top 25</option>
+        <option value="50">Top 50</option>
+      </select>
+    </div>
     <div id="mods-grid"><div id="loading"><div class="spinner"></div><br>A carregar mods do Nexus...</div></div>
   </div>
 </main>
@@ -302,6 +318,7 @@ const LOCAL='http://localhost:8766';
 let allMods=[];
 let installedMods=new Set();
 let currentFilter='all';
+let currentSort='downloads';
 
 // ── Join flow
 var _joinTimer=null;
@@ -343,11 +360,11 @@ function joinCancel(){
   }
   const myIp=p.get('myip');
   if(myIp){
+    // start.bat called with ?myip= — auto-show host panel
     document.getElementById('my-ip-input').value=myIp;
-    if(/^100\./.test(myIp)){
-      document.getElementById('ts-badge').style.display='flex';
-      generateLink();
-    }
+    document.getElementById('share-panel').style.display='block';
+    if(/^100\./.test(myIp)) document.getElementById('ts-badge').style.display='flex';
+    generateLink();
   }
 })();
 
@@ -378,8 +395,23 @@ document.getElementById('btn-cancel').addEventListener('click',function(){
 });
 
 document.getElementById('btn-confirm').addEventListener('click',function(){
-  const ip=document.getElementById('modal-ip').value.trim();
-  if(!ip){ document.getElementById('modal-ip').focus(); return; }
+  var raw=document.getElementById('modal-ip').value.trim();
+  if(!raw){ document.getElementById('modal-ip').focus(); return; }
+  // Accept full join link OR bare IP
+  var ip=raw;
+  try{
+    var u=new URL(raw);
+    var jv=u.searchParams.get('join');
+    if(jv) ip=jv;
+    else ip=u.hostname;
+  }catch(e){}
+  // Strip protocol/port if bare URL pasted
+  ip=ip.replace(/^https?:\/\//,'').split(':')[0].split('/')[0];
+  if(!/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(ip)){
+    document.getElementById('modal-ip').style.borderColor='var(--red)';
+    document.getElementById('modal-ip').placeholder='IP inválido — usa o link enviado pelo Anfitrião';
+    return;
+  }
   document.getElementById('modal-overlay').classList.remove('open');
   const sc=document.getElementById('join-screen');
   sc.classList.add('show');
@@ -505,6 +537,18 @@ function pollStatus(){
       setStatVal('stat-friend',friendConn?'Conectado ✓':'Aguardando...',friendConn?'ok':'');
       if(friendConn) document.getElementById('stat-friend').style.animation='none';
       else document.getElementById('stat-friend').style.animation='running-pulse 2s infinite alternate';
+      var hcs=document.getElementById('host-conn-status');
+      var hct=document.getElementById('host-conn-text');
+      if(hcs){
+        hcs.style.display='block';
+        if(friendConn){
+          hcs.style.background='rgba(34,197,94,.1)';hcs.style.borderColor='rgba(34,197,94,.3)';hcs.style.color='#4ade80';
+          hct.textContent='🟢 Convidado conectado! Podem começar a missão.';
+        }else{
+          hcs.style.background='rgba(59,130,246,.08)';hcs.style.borderColor='rgba(59,130,246,.3)';hcs.style.color='#93c5fd';
+          hct.textContent='⏳ Aguardando Convidado — envia o link acima.';
+        }
+      }
       var gf=d.game_found,gr=d.game_running;
       setStatVal('stat-game',gf?(gr?'Rodando':'Encontrado'):'Não encontrado',gf?(gr?'gold':'ok'):'bad');
       var modsArr=(d.my_mods||[]).concat(d.pak_mods||[]);
@@ -561,14 +605,23 @@ fetch('/api/nexus')
     document.getElementById('mods-grid').innerHTML='<div style="color:var(--red);padding:24px">Erro ao carregar mods. Verifique a API.</div>';
   });
 
-document.querySelectorAll('.filter-btn').forEach(function(btn){
+document.querySelectorAll('[data-filter]').forEach(function(btn){
   btn.addEventListener('click',function(){
     currentFilter=this.dataset.filter;
-    document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelectorAll('[data-filter]').forEach(function(b){b.classList.remove('active');});
     this.classList.add('active');
     renderGrid();
   });
 });
+document.querySelectorAll('[data-sort]').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    currentSort=this.dataset.sort;
+    document.querySelectorAll('[data-sort]').forEach(function(b){b.classList.remove('active');});
+    this.classList.add('active');
+    renderGrid();
+  });
+});
+document.getElementById('limit-select').addEventListener('change',renderGrid);
 
 var _installing=new Set();
 
@@ -611,7 +664,17 @@ function renderGrid(){
   var mods=allMods.filter(function(m){return m.name&&m.mod_id;});
   if(currentFilter==='installed') mods=mods.filter(function(m){return installedMods.has(m.name.toLowerCase());});
   if(currentFilter==='not_installed') mods=mods.filter(function(m){return !installedMods.has(m.name.toLowerCase());});
-  document.getElementById('mods-count').textContent=mods.length+'/'+allMods.length+' mods';
+  // Sort
+  mods.sort(function(a,b){
+    if(currentSort==='endorsements') return (b.endorsement_count||0)-(a.endorsement_count||0);
+    if(currentSort==='name') return (a.name||'').localeCompare(b.name||'');
+    return (b.mod_downloads||0)-(a.mod_downloads||0); // default: downloads
+  });
+  // Limit
+  var lim=parseInt(document.getElementById('limit-select').value)||0;
+  var total=mods.length;
+  if(lim>0) mods=mods.slice(0,lim);
+  document.getElementById('mods-count').textContent=mods.length+'/'+total+' mods';
 
   if(!mods.length&&allMods.length>0){
     grid.innerHTML='<div style="color:var(--fg2);padding:24px">Nenhum mod encontrado.</div>';
