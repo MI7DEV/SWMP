@@ -715,13 +715,15 @@ class _HTTP(BaseHTTPRequestHandler):
                     params[urllib.parse.unquote_plus(k)] = urllib.parse.unquote_plus(v)
 
         if path == "/api/info":
-            body = json.dumps({
+            info: dict = {
                 "local_ip":_local_ip,"relay_port":RELAY_PORT,
                 "game_running":_game_running,"game_found":GAME_ROOT is not None,
                 "explorer_done":_explorer_done,"install_status":_install_status,
                 "my_mods":list_mods(),"pak_mods":list_paks(),
-                "install_log":_install_log[-12:],
-            }).encode()
+            }
+            if from_local:
+                info["install_log"] = _install_log[-12:]
+            body = json.dumps(info).encode()
             return self._reply(200,"application/json", body)
 
         if path == "/api/config":
@@ -755,6 +757,8 @@ class _HTTP(BaseHTTPRequestHandler):
             return self._reply(200,"application/json", body)
 
         if path == "/api/install-log":
+            if not from_local:
+                return self._reply(403,"application/json", b'{"error":"forbidden"}')
             body = json.dumps({"log": _install_log, "status": _install_status}).encode()
             return self._reply(200,"application/json", body)
 

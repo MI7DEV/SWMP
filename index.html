@@ -276,6 +276,8 @@ let currentFilter='all';
   const p=new URLSearchParams(location.search);
   const joinIp=p.get('join');
   if(joinIp){
+    // Only allow bare IPv4 addresses to prevent open redirect
+    if(!/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(joinIp)) { location.replace(location.origin); return; }
     const sc=document.getElementById('join-screen');
     sc.classList.add('show');
     document.getElementById('join-host-text').textContent='Servidor: '+joinIp+':8766';
@@ -451,9 +453,16 @@ function renderGrid(){
     var endorsements='⬆ '+(m.endorsement_count||0).toLocaleString();
     var downloads='⬇ '+(m.mod_downloads||0).toLocaleString();
 
-    var thumb=m.picture_url
-      ?'<img class="mod-thumb" src="'+m.picture_url+'" loading="lazy" alt="">'
-      :'<div class="mod-thumb-ph">⚔</div>';
+    var thumbEl;
+    if(m.picture_url){
+      try{
+        var pu=new URL(m.picture_url);
+        if(pu.protocol==='https:'&&/nexusmods\.com$/i.test(pu.hostname)){
+          thumbEl='<img class="mod-thumb" src="" loading="lazy" alt="" data-src="'+pu.href+'">';
+        }else{thumbEl='';}
+      }catch(e){thumbEl='';}
+    }
+    var thumb=thumbEl||'<div class="mod-thumb-ph">⚔</div>';
 
     card.innerHTML=thumb+
       '<div class="mod-body">'+
@@ -476,6 +485,9 @@ function renderGrid(){
     card.querySelector('.mod-name').textContent=m.name;
     card.querySelector('.mod-desc').textContent=desc;
     card.querySelector('.mod-ver').textContent='v'+(m.version||'?');
+    // Restore img src safely (bypasses innerHTML injection risk)
+    var imgEl=card.querySelector('img[data-src]');
+    if(imgEl){ imgEl.src=imgEl.dataset.src; imgEl.removeAttribute('data-src'); }
 
     if(!inst){
       var btn=card.querySelector('.install-btn');
