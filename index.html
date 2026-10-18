@@ -568,18 +568,34 @@ function copyTsInvite(){
 // ── Buttons
 document.getElementById('btn-host').addEventListener('click',function(){
   const panel=document.getElementById('share-panel');
-  panel.style.display=panel.style.display==='block'?'none':'block';
-  fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2000)})
+  const isOpen=panel.style.display==='block';
+  panel.style.display=isOpen?'none':'block';
+  if(isOpen) return;
+  // Auto self-heal when opening host panel
+  var hcs=document.getElementById('host-conn-status');
+  var hct=document.getElementById('host-conn-text');
+  if(hcs){ hcs.style.display='block'; hcs.style.background='rgba(59,130,246,.08)'; hcs.style.borderColor='rgba(59,130,246,.3)'; hcs.style.color='#93c5fd'; hct.textContent='⟳ A verificar sistema (firewall, Tailscale)...'; }
+  // Try self-heal first; fallback to /api/info
+  fetch(LOCAL+'/api/self-heal',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},signal:AbortSignal.timeout(8000)})
     .then(function(r){return r.json();})
     .then(function(d){
       var ip=d.tailscale_ip||(d.local_ip&&d.local_ip!=='127.0.0.1'?d.local_ip:'');
-      if(ip){
-        document.getElementById('my-ip-input').value=ip;
-        document.getElementById('ts-badge').style.display=d.tailscale_ip?'flex':'none';
-        generateLink();
-      }
+      if(ip){ document.getElementById('my-ip-input').value=ip; document.getElementById('ts-badge').style.display=d.tailscale_ip?'flex':'none'; generateLink(); }
+      if(hcs&&hct){ hcs.style.background='rgba(34,197,94,.1)'; hcs.style.borderColor='rgba(34,197,94,.3)'; hcs.style.color='#4ade80'; hct.textContent='✓ Sistema verificado — pronto para convidar'; }
+      var clEl=document.getElementById('conn-log');
+      if(clEl&&d.results){ d.results.forEach(function(r){ var dv=document.createElement('div');dv.className='gl';dv.textContent='  '+r;clEl.appendChild(dv); }); clEl.scrollTop=clEl.scrollHeight; _lastConnLogLen=(clEl.querySelectorAll('div').length); }
     })
-    .catch(function(){});
+    .catch(function(){
+      // self-heal not available — fallback to /api/info
+      fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2000)})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var ip=d.tailscale_ip||(d.local_ip&&d.local_ip!=='127.0.0.1'?d.local_ip:'');
+          if(ip){ document.getElementById('my-ip-input').value=ip; document.getElementById('ts-badge').style.display=d.tailscale_ip?'flex':'none'; generateLink(); }
+          if(hcs&&hct){ hcs.style.background='rgba(245,197,24,.08)'; hcs.style.borderColor='rgba(245,197,24,.25)'; hcs.style.color='var(--gold)'; hct.textContent='⚠ Reinicia o start.bat uma vez para activar o auto-verificador'; }
+        })
+        .catch(function(){ if(hcs&&hct){ hcs.style.color='var(--red)'; hct.textContent='Servidor não encontrado — abre o start.bat'; } });
+    });
 });
 
 document.getElementById('btn-client').addEventListener('click',function(){
