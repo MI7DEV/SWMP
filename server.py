@@ -39,6 +39,7 @@ _clients: dict     = {}
 _game_running      = False
 _explorer_done     = False
 _local_ip          = "127.0.0.1"
+_tailscale_ip: str | None = None
 _install_status    = "pending"
 _install_log: list = []
 _mod_lists: dict   = {}
@@ -49,8 +50,34 @@ _loop              = None         # asyncio event loop (set in main)
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
 
+def detect_tailscale_ip() -> str | None:
+    global _tailscale_ip
+    candidates = [["tailscale", "ip", "-4"]]
+    if os.name == "nt":
+        ts_path = r"C:\Program Files\Tailscale\tailscale.exe"
+        if os.path.exists(ts_path):
+            candidates.insert(0, [ts_path, "ip", "-4"])
+    for cmd in candidates:
+        try:
+            out = subprocess.check_output(
+                cmd, encoding="utf-8", errors="replace",
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                timeout=5
+            )
+            ip = out.strip().split("\n")[0].strip()
+            if ip and re.match(r"^\d+\.\d+\.\d+\.\d+$", ip):
+                _tailscale_ip = ip
+                return ip
+        except Exception:
+            pass
+    return None
+
 def detect_local_ip():
     global _local_ip
+    ts = detect_tailscale_ip()
+    if ts:
+        _local_ip = ts
+        return
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
@@ -533,6 +560,7 @@ async def ws_handler(ws):
             "relay_port":RELAY_PORT,"game_found":GAME_ROOT is not None,
             "friend":other in _clients,"install_status":_install_status,
             "my_mods":list_mods(),"char_split":_char_split,
+            "tailscale_ip":_tailscale_ip,
         }))
         if role == "host":
             for lm,lc in _install_log:
@@ -721,6 +749,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 "game_running":_game_running,"game_found":GAME_ROOT is not None,
                 "explorer_done":_explorer_done,"install_status":_install_status,
                 "my_mods":list_mods(),"pak_mods":list_paks(),
+                "tailscale_ip":_tailscale_ip,
             }
             if from_local:
                 info["install_log"] = _install_log[-12:]

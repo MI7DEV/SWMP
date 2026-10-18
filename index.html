@@ -178,6 +178,12 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
   <div class="join-spinner"></div>
   <div class="join-title">LIGANDO AO SERVIDOR</div>
   <div class="join-sub" id="join-host-text"></div>
+  <div id="join-ts-notice" style="display:none;max-width:380px;padding:12px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:8px;font-size:12px;color:#93c5fd;line-height:1.6;text-align:left">
+    <strong style="color:#60a5fa">Este servidor usa Tailscale.</strong><br>
+    Precisas do Tailscale instalado para conectar.<br>
+    <a href="https://tailscale.com/download" target="_blank" style="color:#38bdf8;text-decoration:underline">Instalar Tailscale (gratuito) →</a><br>
+    <span style="color:#64748b;font-size:11px">Depois de instalar e fazer login, clica o link novamente.</span>
+  </div>
 </div>
 
 <div id="modal-overlay">
@@ -220,8 +226,11 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 
   <div id="share-panel">
     <h3>Link de Convite</h3>
+    <div id="ts-badge" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;font-size:12px;color:#4ade80;margin-bottom:10px">
+      <span>🌐</span><span>IP Tailscale — funciona pela internet (qualquer distância)</span>
+    </div>
     <div class="share-row" style="margin-bottom:8px">
-      <span style="font-size:12px;color:var(--fg2)">Seu IP local:</span>
+      <span style="font-size:12px;color:var(--fg2)">Teu IP:</span>
       <input type="text" id="my-ip-input" class="ip-input" placeholder="192.168.1.100" style="max-width:180px;flex:none">
       <button class="copy-btn" id="btn-gen-link">Gerar Link</button>
     </div>
@@ -287,22 +296,32 @@ let currentFilter='all';
     const sc=document.getElementById('join-screen');
     sc.classList.add('show');
     document.getElementById('join-host-text').textContent='Servidor: '+joinIp+':8766';
-    setTimeout(function(){ location.href='http://'+joinIp+':8766'; },1200);
+    if(/^100\./.test(joinIp)) {
+      document.getElementById('join-ts-notice').style.display='block';
+    }
+    setTimeout(function(){ location.href='http://'+joinIp+':8766'; },2000);
   }
   const myIp=p.get('myip');
-  if(myIp) document.getElementById('my-ip-input').value=myIp;
+  if(myIp){
+    document.getElementById('my-ip-input').value=myIp;
+    if(/^100\./.test(myIp)){
+      document.getElementById('ts-badge').style.display='flex';
+      generateLink();
+    }
+  }
 })();
 
 // ── Buttons
 document.getElementById('btn-host').addEventListener('click',function(){
   const panel=document.getElementById('share-panel');
   panel.style.display=panel.style.display==='block'?'none':'block';
-  // Auto-fill IP from local server if running
   fetch(LOCAL+'/api/info',{signal:AbortSignal.timeout(2000)})
     .then(function(r){return r.json();})
     .then(function(d){
-      if(d.local_ip&&d.local_ip!=='127.0.0.1'){
-        document.getElementById('my-ip-input').value=d.local_ip;
+      var ip=d.tailscale_ip||(d.local_ip&&d.local_ip!=='127.0.0.1'?d.local_ip:'');
+      if(ip){
+        document.getElementById('my-ip-input').value=ip;
+        document.getElementById('ts-badge').style.display=d.tailscale_ip?'flex':'none';
         generateLink();
       }
     })
@@ -422,9 +441,13 @@ function pollStatus(){
       setStatVal('stat-install',istMap[ist]||ist,ist==='done'?'ok':ist==='failed'?'bad':'');
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
-      if(d.local_ip&&d.local_ip!=='127.0.0.1'){
-        var ipIn=document.getElementById('my-ip-input');
+      var ipIn=document.getElementById('my-ip-input');
+      if(d.tailscale_ip){
+        if(!ipIn.value||ipIn.value===d.local_ip){ipIn.value=d.tailscale_ip;generateLink();}
+        document.getElementById('ts-badge').style.display='flex';
+      } else if(d.local_ip&&d.local_ip!=='127.0.0.1'){
         if(!ipIn.value){ipIn.value=d.local_ip;generateLink();}
+        document.getElementById('ts-badge').style.display='none';
       }
       renderGrid();
     })
