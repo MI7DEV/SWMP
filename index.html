@@ -436,8 +436,11 @@ function installMod(modId,name,btn){
   if(_installing.has(modId)) return;
   _installing.add(modId);
   btn.textContent='INSTALANDO...';btn.disabled=true;btn.style.opacity='0.7';
-  fetch(LOCAL+'/api/nexus/install-start?id='+modId+'&name='+encodeURIComponent(name),
-        {signal:AbortSignal.timeout(5000)})
+  fetch(LOCAL+'/api/nexus/install-start',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:String(modId),name:name}),
+    signal:AbortSignal.timeout(5000)})
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.status==='started'){

@@ -763,30 +763,9 @@ class _HTTP(BaseHTTPRequestHandler):
             body = json.dumps({"log": _install_log, "status": _install_status}).encode()
             return self._reply(200,"application/json", body)
 
+        # install-start moved to do_POST — reject GET attempts
         if path == "/api/nexus/install-start":
-            if not from_local:
-                return self._reply(403,"application/json", b'{"error":"forbidden"}')
-            # CSRF: if Origin header present it must be this server or the portal
-            _ALLOWED_ORIGINS = {
-                f"http://localhost:{HTTP_PORT}",
-                f"http://127.0.0.1:{HTTP_PORT}",
-                "https://swmp-six.vercel.app",
-            }
-            origin = self.headers.get("Origin","")
-            if origin and origin not in _ALLOWED_ORIGINS:
-                return self._reply(403,"application/json", b'{"error":"forbidden"}')
-            id_str = params.get("id","0")
-            if not id_str.isdigit():
-                return self._reply(400,"application/json", b'{"error":"bad id"}')
-            mod_id = int(id_str)
-            raw_name = params.get("name","Mod")[:100]
-            mod_name = re.sub(r'[^A-Za-z0-9 _.\-]', '_', raw_name).strip('.')
-            if not mod_name:
-                return self._reply(400,"application/json", b'{"error":"bad name"}')
-            if _loop is not None:
-                asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
-                return self._reply(200,"application/json", b'{"status":"started"}')
-            return self._reply(503,"application/json", b'{"error":"loop not ready"}')
+            return self._reply(405,"application/json", b'{"error":"use POST"}')
 
         if path == "/api/nexus/uninstall":
             name = params.get("name","")
@@ -807,13 +786,87 @@ class _HTTP(BaseHTTPRequestHandler):
         else:
             self._reply(404,"text/plain", b"not found")
 
-    def _reply(self, code, ctype, body):
+    _SAFE_ORIGINS = {
+        f"http://localhost:{HTTP_PORT}",
+        f"http://127.0.0.1:{HTTP_PORT}",
+        "https://swmp-six.vercel.app",
+    }
+    _SAFE_HOSTS = {f"localhost:{HTTP_PORT}", f"127.0.0.1:{HTTP_PORT}"}
+
+    def _origin_ok(self) -> bool:
+        origin = self.headers.get("Origin", "")
+        return not origin or origin in self._SAFE_ORIGINS
+
+    def _host_ok(self) -> bool:
+        host = self.headers.get("Host", "")
+        return host in self._SAFE_HOSTS
+
+    def _acao(self):
+        origin = self.headers.get("Origin", "")
+        return origin if origin in self._SAFE_ORIGINS else ""
+
+    def _reply(self, code, ctype, body, acao: str = "*"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", len(body))
-        self.send_header("Access-Control-Allow-Origin","*")
+        self.send_header("Access-Control-Allow-Origin", acao)
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        origin = self.headers.get("Origin", "")
+        if origin not in self._SAFE_ORIGINS:
+            self.send_response(403); self.end_headers(); return
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
+
+    def do_POST(self):
+        from_local = self.client_address[0] in ("127.0.0.1", "::1")
+        raw_path = self.path
+        path = raw_path.split("?")[0]
+        params: dict = {}
+        if "?" in raw_path:
+            for part in raw_path.split("?", 1)[1].split("&"):
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    params[urllib.parse.unquote_plus(k)] = urllib.parse.unquote_plus(v)
+        # Also parse JSON body if present
+        clen = int(self.headers.get("Content-Length", 0) or 0)
+        if clen > 0:
+            try:
+                body_data = json.loads(self.rfile.read(clen))
+                if isinstance(body_data, dict):
+                    params.update(body_data)
+            except Exception:
+                pass
+
+        acao = self._acao()
+
+        if path == "/api/nexus/install-start":
+            if not from_local:
+                return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
+            if not self._origin_ok():
+                return self._reply(403, "application/json", b'{"error":"bad origin"}', acao)
+            if not self._host_ok():
+                return self._reply(421, "application/json", b'{"error":"bad host"}', acao)
+            id_str = params.get("id", "0")
+            if not id_str.isdigit():
+                return self._reply(400, "application/json", b'{"error":"bad id"}', acao)
+            mod_id = int(id_str)
+            raw_name = params.get("name", "Mod")[:100]
+            mod_name = re.sub(r'[^A-Za-z0-9 _.\-]', '_', raw_name).strip('.')
+            if not mod_name:
+                return self._reply(400, "application/json", b'{"error":"bad name"}', acao)
+            if _loop is not None:
+                asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
+                return self._reply(200, "application/json", b'{"status":"started"}', acao)
+            return self._reply(503, "application/json", b'{"error":"loop not ready"}', acao)
+
+        self._reply(404, "application/json", b'{"error":"not found"}', acao)
 
     def log_message(self, *_):
         pass
@@ -823,6 +876,9 @@ def _run_http():
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
+def _html_esc(s: str) -> str:
+    return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+
 class _MockWS:
     """Fake WebSocket that routes messages to _install_log via _ilog."""
     async def send(self, msg_json: str):
@@ -830,13 +886,14 @@ class _MockWS:
             msg = json.loads(msg_json)
             t = msg.get("type", "")
             if t == "LOG":
-                await _ilog(msg.get("msg", ""), msg.get("c", ""))
+                await _ilog(_html_esc(str(msg.get("msg", ""))), msg.get("c", ""))
             elif t == "NEXUS_INSTALLED":
-                await _ilog(f"✓ '{msg.get('orig_name','')}' instalado.", "green")
+                safe = _html_esc(str(msg.get("orig_name", "")))
+                await _ilog(f"✓ '{safe}' instalado.", "green")
             elif t == "NEXUS_OPEN_BROWSER":
                 import webbrowser
                 webbrowser.open(msg.get("url", ""))
-                await _ilog(msg.get("msg", "Abre o browser para download manual."), "gold")
+                await _ilog("Abre o browser para download manual.", "gold")
         except Exception:
             pass
 
