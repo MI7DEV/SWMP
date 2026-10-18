@@ -48,8 +48,18 @@ _pending_dl: str | None = None   # nome do mod aguardando download manual
 _dl_seen: set      = set()       # ficheiros já vistos em Downloads/
 _loop              = None         # asyncio event loop (set in main)
 _turn_state: dict  = {}          # último estado de turno recebido do Lua
+_tunnel_url: str | None = None   # URL pública do cloudflared tunnel
+_cf_proc           = None         # processo cloudflared
+_conn_log: list    = []           # log unificado de ligações (host + convidado)
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
+
+def conn_log_add(msg: str, c: str = ""):
+    global _conn_log
+    ts = time.strftime("%H:%M:%S")
+    _conn_log.append([f"[{ts}] {msg}", c])
+    if len(_conn_log) > 60:
+        del _conn_log[:20]
 
 def detect_tailscale_ip() -> str | None:
     global _tailscale_ip
@@ -554,6 +564,9 @@ async def ws_handler(ws):
             return
         _clients[role] = ws
         other = "client" if role == "host" else "host"
+        peer_ip = ws.remote_address[0] if ws.remote_address else "?"
+        label = "CONVIDADO" if role == "client" else "ANFITRIÃO"
+        conn_log_add(f"[{label}] conectou ({peer_ip})", "green" if role == "client" else "blue")
 
         await ws.send(json.dumps({
             "type":"STATE","game_running":_game_running,
@@ -619,6 +632,11 @@ async def ws_handler(ws):
                 except Exception as e:
                     await ws.send(json.dumps({"type":"LOG","c":"red","msg":f"Erro ao obter ficheiros: {e}"}))
 
+            elif t == "CLIENT_LOG":
+                m = msg.get("msg", "")
+                c = msg.get("c", "")
+                conn_log_add(f"[CONVIDADO] {m}", c)
+
             elif t == "SYNC_ACTION" and other in _clients:
                 await _clients[other].send(json.dumps(msg))
 
@@ -630,6 +648,8 @@ async def ws_handler(ws):
         pass
     finally:
         if role:
+            label = "CONVIDADO" if role == "client" else "ANFITRIÃO"
+            conn_log_add(f"[{label}] desconectou", "red" if role == "client" else "")
             _clients.pop(role, None); _mod_lists.pop(role, None)
             await broadcast({"type":"PEER_DISCONNECTED","role":role})
 
@@ -766,6 +786,7 @@ class _HTTP(BaseHTTPRequestHandler):
             if from_local:
                 info["install_log"] = _install_log[-12:]
                 info["tailscale_ip"] = _tailscale_ip
+                info["conn_log"] = _conn_log[-30:]
             body = json.dumps(info).encode()
             return self._reply(200,"application/json", body)
 
@@ -822,6 +843,8 @@ class _HTTP(BaseHTTPRequestHandler):
         if from_local or "mode=host" in raw_path:
             f = _THIS / "host.html"
         else:
+            peer_ip = self.client_address[0]
+            conn_log_add(f"[CONVIDADO] abriu http://{peer_ip}:{HTTP_PORT} → a servir client.html", "blue")
             f = _THIS / "client.html"
         if f.exists():
             self._reply(200,"text/html; charset=utf-8", f.read_bytes())
