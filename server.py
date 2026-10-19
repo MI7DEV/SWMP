@@ -51,7 +51,8 @@ _turn_state: dict  = {}          # último estado de turno recebido do Lua
 _tunnel_url: str | None = None   # URL pública do cloudflared tunnel
 _cf_proc           = None         # processo cloudflared
 _conn_log: list    = []           # log unificado de ligações (host + convidado)
-_session_token     = __import__('secrets').token_urlsafe(16)  # token de sessão para WebSocket
+_host_token  = __import__('secrets').token_urlsafe(20)  # só para o host (localhost) — nunca em links
+_guest_token = __import__('secrets').token_urlsafe(20)  # incluído no link de partilha
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
 
@@ -616,15 +617,23 @@ async def ws_handler(ws):
         role = data.get("role")
         if role not in ("host","client"):
             return
-        # Token check: require session_token in HELLO when tunnel is active
-        if _tunnel_url:
-            peer_ip = ws.remote_address[0] if ws.remote_address else ""
-            tok = data.get("token","")
-            if tok != _session_token:
+        # Token auth — always required regardless of tunnel state.
+        # host_token: never in share links → only localhost can supply it.
+        # guest_token: included in share links → only allows role=client.
+        import hmac
+        tok = data.get("token","")
+        if role == "host":
+            if not hmac.compare_digest(tok, _host_token):
                 await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
                 return
-            # Host role only from loopback (tunnel connections also arrive at 127.0.0.1
-            # but they must supply the token which only localhost /api/info returns)
+        else:  # role == "client"
+            if not hmac.compare_digest(tok, _guest_token):
+                await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
+                return
+        # Reject duplicate role (don't silently overwrite existing connection)
+        if role in _clients and _clients[role].open:
+            await ws.send(json.dumps({"type":"ERROR","msg":"papel já ocupado"}))
+            return
         _clients[role] = ws
         other = "client" if role == "host" else "host"
         peer_ip = ws.remote_address[0] if ws.remote_address else "?"
@@ -847,13 +856,21 @@ class _HTTP(BaseHTTPRequestHandler):
                 "turn_state":_turn_state,
                 "tunnel_url": _tunnel_url,
             }
-            if from_local:
+            # Expose tokens only when:
+            # - request is from loopback (from_local)
+            # - AND Origin is absent or in SAFE_ORIGINS (blocks DNS rebinding)
+            # - AND Host header passes _host_ok() check
+            origin = self.headers.get("Origin", "")
+            trusted_origin = (not origin) or (origin in self._SAFE_ORIGINS)
+            if from_local and trusted_origin and self._host_ok():
                 info["install_log"] = _install_log[-12:]
                 info["tailscale_ip"] = _tailscale_ip
                 info["conn_log"] = _conn_log[-30:]
-                info["session_token"] = _session_token
+                info["host_token"]  = _host_token   # NEVER put in share links
+                info["guest_token"] = _guest_token  # safe to put in share links
+            acao = origin if (origin and origin in self._SAFE_ORIGINS) else ""
             body = json.dumps(info).encode()
-            return self._reply(200,"application/json", body)
+            return self._reply(200,"application/json", body, acao)
 
         # self-heal moved to do_POST — reject GET attempts
         if path == "/api/self-heal":

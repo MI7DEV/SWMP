@@ -381,7 +381,9 @@ function setClientStatus(on){
 }
 function updateShareUrl(ip){
   localIp=ip;
-  document.getElementById('share-url').textContent=`http://${ip}:${location.port||8766}`;
+  var port=location.port||8766;
+  var tok=_guestToken?('?tok='+encodeURIComponent(_guestToken)):'';
+  document.getElementById('share-url').textContent=`http://${ip}:${port}${tok}`;
 }
 function copyUrl(){
   const url=document.getElementById('share-url').textContent;
@@ -715,7 +717,7 @@ function connect(){
   ws=new WebSocket(`ws://${h}:${RELAY_PORT}`);
 
   ws.onopen=()=>{
-    ws.send(JSON.stringify({type:'HELLO',role:'host',token:_sessionToken}));
+    ws.send(JSON.stringify({type:'HELLO',role:'host',token:_hostToken}));
     document.getElementById('relay-dot').className='conn-dot ok';
     log('Conectado ao relay.','green');
   };
@@ -844,10 +846,12 @@ fetch('/api/config').then(r=>r.json()).then(cfg=>{
     document.getElementById('nx-key').style.color = 'var(--green)';
   }
 }).catch(()=>{});
-var _sessionToken='';
+var _hostToken='';
+var _guestToken='';
 fetch('/api/info').then(r=>r.json()).then(info=>{
+  if(info.host_token)  _hostToken=info.host_token;
+  if(info.guest_token) _guestToken=info.guest_token;
   if(info.local_ip&&info.local_ip!=='127.0.0.1') updateShareUrl(info.local_ip);
-  if(info.session_token) _sessionToken=info.session_token;
   setGameStatus(info.game_running);
   if(info.my_mods) myMods=info.my_mods;
   // Construir set de instalados

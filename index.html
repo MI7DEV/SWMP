@@ -447,11 +447,13 @@ function doJoinGo(){
     jlog('['+ts+'] Tunnel: '+dest,'bl');
     setTimeout(function(){ location.href=dest; }, 400);
   } else {
-    jstep(3,'done','A abrir http://'+ip+':8766...');
+    var tok=new URLSearchParams(location.search).get('tok')||'';
+    var dest='http://'+ip+':8766'+(tok?'?tok='+encodeURIComponent(tok):'');
+    jstep(3,'done','A abrir '+dest+'...');
     jstep(4,'active','A conectar...');
-    jlog('['+ts+'] A navegar para http://'+ip+':8766','bl');
+    jlog('['+ts+'] A navegar para '+dest,'bl');
     jlog('['+ts+'] Se o browser mostrar erro — pressiona Voltar e verifica o log acima','gl');
-    setTimeout(function(){ location.href='http://'+ip+':8766'; }, 400);
+    setTimeout(function(){ location.href=dest; }, 400);
   }
 }
 
@@ -655,9 +657,10 @@ function generateLink(){
   if(/^https?:\/\//i.test(ip)||/trycloudflare\.com/.test(ip)){
     var host=ip.replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
     link=location.origin+'/client?host='+encodeURIComponent(host);
-    if(_sessionToken) link+='&tok='+encodeURIComponent(_sessionToken);
+    if(_guestToken) link+='&tok='+encodeURIComponent(_guestToken);
   } else {
     link=location.origin+'/?join='+ip;
+    if(_guestToken) link+='&tok='+encodeURIComponent(_guestToken);
   }
   document.getElementById('share-link-input').value=link;
   document.getElementById('link-row').style.display='flex';
@@ -679,7 +682,8 @@ var srvLabel=document.getElementById('srv-label');
 var _modeSet=false;
 var _isHost=false;
 var _pollTimer=null;
-var _sessionToken='';
+var _hostToken='';
+var _guestToken='';
 
 function setStatVal(id,val,cls){
   var el=document.getElementById(id);
@@ -857,7 +861,8 @@ function pollStatus(){
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
       if(d.conn_log) renderConnLog(d.conn_log);
-      if(d.session_token) _sessionToken=d.session_token;
+      if(d.host_token)  _hostToken=d.host_token;
+      if(d.guest_token) _guestToken=d.guest_token;
       if(d.turn_state&&d.turn_state.round) updateTurnState(d.turn_state);
       var ipIn=document.getElementById('my-ip-input');
       if(d.tunnel_url){
