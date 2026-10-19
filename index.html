@@ -853,13 +853,17 @@ function enterClientMode(){
   if(_modeSet) return;
   _modeSet=true;_isHost=false;
   document.getElementById('status-panel').style.display='none';
-  document.getElementById('client-banner').style.display='block';
-  srvDot.className='dot';srvLabel.textContent='Modo Cliente';
   // Stop polling — no server here
   if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
-  // Highlight client button
-  document.getElementById('btn-client').classList.add('primary');
-  document.getElementById('btn-host').classList.remove('primary');
+  // Show Nexus API status in header dot
+  srvDot.className='dot pulse';srvLabel.textContent='A verificar...';
+  fetch('/api/health').then(function(r){return r.json();}).then(function(h){
+    if(h.ok){
+      srvDot.className='dot green';srvLabel.textContent='Nexus Online';
+    }else{
+      srvDot.className='dot red';srvLabel.textContent='Nexus Offline';
+    }
+  }).catch(function(){srvDot.className='dot';srvLabel.textContent='Nexus';});
 }
 
 function pollStatus(){
@@ -1094,14 +1098,16 @@ function renderGrid(){
     var imgEl=card.querySelector('img[data-src]');
     if(imgEl){ imgEl.src=imgEl.dataset.src; imgEl.removeAttribute('data-src'); }
 
-    if(!inst){
+    if(!inst && _isHost){
       var btn=card.querySelector('.install-btn');
-      if(_installing.has(m.mod_id)){
-        btn.textContent='A INSTALAR...';btn.disabled=true;btn.style.opacity='0.7';
+      if(btn){
+        if(_installing.has(m.mod_id)){
+          btn.textContent='A INSTALAR...';btn.disabled=true;btn.style.opacity='0.7';
+        }
+        (function(modId,modName,b){
+          b.addEventListener('click',function(){ installMod(modId,modName,b); });
+        })(m.mod_id,m.name,btn);
       }
-      (function(modId,modName,b){
-        b.addEventListener('click',function(){ installMod(modId,modName,b); });
-      })(m.mod_id,m.name,btn);
     }
     grid.appendChild(card);
   });
