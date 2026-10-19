@@ -1,7 +1,7 @@
 const NX_GAME = "starwarszerocompany";
 const NX_BASE = "https://api.nexusmods.com/v1";
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 

@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   // Vercel has no knowledge of the local game/relay — return neutral defaults
   // so the browser still calls connect() and tries ws://localhost:8765
