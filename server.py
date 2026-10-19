@@ -632,20 +632,29 @@ async def ws_handler(ws):
             if not hmac.compare_digest(tok, _guest_token):
                 await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
                 return
-        # Reject duplicate role if the existing connection is still alive
+        # Reject duplicate role if the existing connection is still alive.
+        # Fail-closed: if liveness cannot be determined, assume alive and reject.
         if req_role in _clients:
             existing = _clients[req_role]
+            alive = True  # assume alive unless we can confirm otherwise
             try:
-                alive = getattr(existing, "open", None)
-                if alive is None:
-                    # websockets ≥ 12: check via state attribute
-                    from websockets.connection import State
-                    alive = existing.state == State.OPEN
+                # websockets < 12: ws.open is a bool property
+                # websockets ≥ 12: ws.state is an enum; OPEN means connected
+                state = getattr(existing, "state", None)
+                if state is not None:
+                    alive = state.name == "OPEN"
+                else:
+                    alive = bool(getattr(existing, "open", True))
             except Exception:
-                alive = False
+                alive = True  # fail-closed: can't tell → treat as alive
             if alive:
                 await ws.send(json.dumps({"type":"ERROR","msg":"papel já ocupado"}))
                 return
+            # Stale socket confirmed — close it explicitly before replacing
+            try:
+                await existing.close()
+            except Exception:
+                pass
         # All checks passed — commit to this role
         role = req_role
         _clients[role] = ws
