@@ -904,16 +904,37 @@ function stripBBCode(s){
   return (s||'').replace(/\[\/?\w+(?:=[^\]]+)?\]/g,'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
 }
 
-fetch('/api/nexus')
-  .then(function(r){return r.json();})
-  .then(function(d){
-    allMods=d.mods||[];
-    document.getElementById('mods-count').textContent=allMods.length+' mods';
-    renderGrid();
-  })
-  .catch(function(){
-    document.getElementById('mods-grid').innerHTML='<div style="color:var(--red);padding:24px">Erro ao carregar mods. Verifique a API.</div>';
-  });
+function loadMods(customKey) {
+  var headers = {};
+  if (customKey) headers['X-Nexus-Key'] = customKey;
+  fetch('/api/nexus', {headers: headers})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.need_key) {
+        document.getElementById('mods-grid').innerHTML =
+          '<div style="padding:24px;line-height:1.8;color:var(--fg2)">' +
+          '<div style="font-family:Orbitron,sans-serif;font-size:13px;color:var(--gold);margin-bottom:12px;letter-spacing:.1em">CHAVE NEXUS MODS NECESSÁRIA</div>' +
+          '<p style="margin-bottom:10px">Para ver e instalar mods é necessária uma chave gratuita do Nexus Mods.</p>' +
+          '<p style="margin-bottom:14px">1. Vai a <a href="https://www.nexusmods.com/users/myaccount?tab=api" target="_blank" rel="noopener" style="color:var(--blue)">nexusmods.com → Perfil → API Keys</a><br>' +
+          '2. Cria uma chave pessoal (Personal API Key)<br>' +
+          '3. Cola-a aqui em baixo e clica Carregar:</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input id="nx-key-input" type="password" placeholder="Cole a sua API Key aqui…" style="flex:1;min-width:200px;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--fg);font-family:monospace;font-size:13px;outline:none">' +
+          '<button onclick="loadMods(document.getElementById(\'nx-key-input\').value.trim())" style="padding:10px 18px;background:rgba(245,197,24,.12);border:1px solid var(--gold2);border-radius:6px;color:var(--gold);font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:.08em;cursor:pointer">CARREGAR</button>' +
+          '</div>' +
+          '</div>';
+        document.getElementById('mods-count').textContent = '— mods';
+        return;
+      }
+      allMods=d.mods||[];
+      document.getElementById('mods-count').textContent=allMods.length+' mods';
+      renderGrid();
+    })
+    .catch(function(){
+      document.getElementById('mods-grid').innerHTML='<div style="color:var(--red);padding:24px">Erro ao carregar mods — verifica a ligação à internet.</div>';
+    });
+}
+loadMods();
 
 document.querySelectorAll('[data-filter]').forEach(function(btn){
   btn.addEventListener('click',function(){
