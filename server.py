@@ -51,6 +51,7 @@ _turn_state: dict  = {}          # último estado de turno recebido do Lua
 _tunnel_url: str | None = None   # URL pública do cloudflared tunnel
 _cf_proc           = None         # processo cloudflared
 _conn_log: list    = []           # log unificado de ligações (host + convidado)
+_session_token     = __import__('secrets').token_urlsafe(16)  # token de sessão para WebSocket
 
 # ─── Utilitários ──────────────────────────────────────────────────────────────
 
@@ -615,6 +616,15 @@ async def ws_handler(ws):
         role = data.get("role")
         if role not in ("host","client"):
             return
+        # Token check: require session_token in HELLO when tunnel is active
+        if _tunnel_url:
+            peer_ip = ws.remote_address[0] if ws.remote_address else ""
+            tok = data.get("token","")
+            if tok != _session_token:
+                await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
+                return
+            # Host role only from loopback (tunnel connections also arrive at 127.0.0.1
+            # but they must supply the token which only localhost /api/info returns)
         _clients[role] = ws
         other = "client" if role == "host" else "host"
         peer_ip = ws.remote_address[0] if ws.remote_address else "?"
@@ -841,6 +851,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 info["install_log"] = _install_log[-12:]
                 info["tailscale_ip"] = _tailscale_ip
                 info["conn_log"] = _conn_log[-30:]
+                info["session_token"] = _session_token
             body = json.dumps(info).encode()
             return self._reply(200,"application/json", body)
 

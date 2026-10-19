@@ -715,7 +715,7 @@ function connect(){
   ws=new WebSocket(`ws://${h}:${RELAY_PORT}`);
 
   ws.onopen=()=>{
-    ws.send(JSON.stringify({type:'HELLO',role:'host'}));
+    ws.send(JSON.stringify({type:'HELLO',role:'host',token:_sessionToken}));
     document.getElementById('relay-dot').className='conn-dot ok';
     log('Conectado ao relay.','green');
   };
@@ -844,8 +844,10 @@ fetch('/api/config').then(r=>r.json()).then(cfg=>{
     document.getElementById('nx-key').style.color = 'var(--green)';
   }
 }).catch(()=>{});
+var _sessionToken='';
 fetch('/api/info').then(r=>r.json()).then(info=>{
   if(info.local_ip&&info.local_ip!=='127.0.0.1') updateShareUrl(info.local_ip);
+  if(info.session_token) _sessionToken=info.session_token;
   setGameStatus(info.game_running);
   if(info.my_mods) myMods=info.my_mods;
   // Construir set de instalados

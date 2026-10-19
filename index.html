@@ -652,9 +652,10 @@ function generateLink(){
   if(!ip) return;
   var link;
   // Tunnel URL (https://…trycloudflare.com) → guest uses /client?host= directly
-  if(/^https?:\/\//i.test(ip)){
+  if(/^https?:\/\//i.test(ip)||/trycloudflare\.com/.test(ip)){
     var host=ip.replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
     link=location.origin+'/client?host='+encodeURIComponent(host);
+    if(_sessionToken) link+='&tok='+encodeURIComponent(_sessionToken);
   } else {
     link=location.origin+'/?join='+ip;
   }
@@ -678,6 +679,7 @@ var srvLabel=document.getElementById('srv-label');
 var _modeSet=false;
 var _isHost=false;
 var _pollTimer=null;
+var _sessionToken='';
 
 function setStatVal(id,val,cls){
   var el=document.getElementById(id);
@@ -855,6 +857,7 @@ function pollStatus(){
       installedMods=new Set(modsArr.map(function(m){return m.toLowerCase();}));
       if(d.install_log) renderLog(d.install_log);
       if(d.conn_log) renderConnLog(d.conn_log);
+      if(d.session_token) _sessionToken=d.session_token;
       if(d.turn_state&&d.turn_state.round) updateTurnState(d.turn_state);
       var ipIn=document.getElementById('my-ip-input');
       if(d.tunnel_url){

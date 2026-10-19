@@ -237,7 +237,14 @@ function log(msg, c) {
   const box = document.getElementById('log');
   const r   = document.createElement('div');
   r.className = 'lr';
-  r.innerHTML = `<span class="ts">[${ts()}]</span><span class="${c ? 'c-' + c : ''}">${msg}</span>`;
+  const tSpan = document.createElement('span');
+  tSpan.className = 'ts';
+  tSpan.textContent = '[' + ts() + ']';
+  const mSpan = document.createElement('span');
+  if (c) mSpan.className = 'c-' + c.replace(/[^a-z]/g, '');
+  mSpan.textContent = String(msg);
+  r.appendChild(tSpan);
+  r.appendChild(mSpan);
   box.appendChild(r);
   box.scrollTop = box.scrollHeight;
 }
@@ -253,16 +260,29 @@ function showSuccess() {
   document.getElementById('panel-ok').style.display    = 'block';
 }
 
+const _VALID_HOST = /^([a-z0-9-]+\.)+[a-z0-9-]+(:[0-9]{1,5})?$/i;
+const _VALID_IPV4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+function sanitizeHost(raw) {
+  if (!raw) return '';
+  // Strip protocol and path, keep only host[:port]
+  const h = raw.replace(/^https?:\/\//i, '').split('/')[0].split('?')[0];
+  if (_VALID_IPV4.test(h.split(':')[0]) || _VALID_HOST.test(h)) return h.split(':')[0];
+  return '';
+}
+
 function getHostIp() {
   const h = location.hostname;
-  if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.includes('vercel.app') && !h.includes('claude.ai') && !h.includes('anthropic')) return h;
+  if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.includes('vercel.app') && !h.includes('claude.ai') && !h.includes('anthropic')) {
+    return sanitizeHost(h);
+  }
   const p = new URLSearchParams(location.search).get('host');
-  if (p) return decodeURIComponent(p).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  return document.getElementById('ip-input').value.trim().replace(/^https?:\/\//, '').split(':')[0];
+  if (p) return sanitizeHost(p);
+  return sanitizeHost(document.getElementById('ip-input').value.trim());
 }
 
 function isTunnelHost(ip) {
-  return ip && /trycloudflare\.com/.test(ip);
+  return ip && /^[a-z0-9-]+\.trycloudflare\.com$/i.test(ip);
 }
 
 let _connTimeout = null;
@@ -309,7 +329,8 @@ function doConnect() {
 
   ws.onopen = () => {
     clearTimeout(_connTimeout);
-    ws.send(JSON.stringify({ type: 'HELLO', role: 'client' }));
+    const tok = new URLSearchParams(location.search).get('tok') || '';
+    ws.send(JSON.stringify({ type: 'HELLO', role: 'client', token: tok }));
     ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `WebSocket ligado a ${wsUrl}`, c: 'green' }));
     ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `Browser: ${navigator.userAgent.substring(0,60)}`, c: '' }));
     log('Socket aberto. Aguardando confirmação…', 'blue');
