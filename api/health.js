@@ -29,11 +29,10 @@ module.exports = async function handler(req, res) {
         signal: AbortSignal.timeout(6000),
       });
       if (r.ok) {
-        const data = await r.json();
         checks.nx_key_valid = {
           ok: true,
           label: "Chave Nexus válida",
-          detail: `Utilizador: ${data.name || "ok"} | Premium: ${data.is_premium ? "sim" : "não"}`,
+          detail: "Aceite pela API Nexus",
         };
       } else {
         checks.nx_key_valid = {
