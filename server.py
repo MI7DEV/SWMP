@@ -612,28 +612,42 @@ async def ws_handler(ws):
     global _explorer_done, _char_split, _pending_dl
     role = None
     try:
-        raw  = await asyncio.wait_for(ws.recv(), timeout=20)
-        data = json.loads(raw)
-        role = data.get("role")
-        if role not in ("host","client"):
+        raw      = await asyncio.wait_for(ws.recv(), timeout=20)
+        data     = json.loads(raw)
+        req_role = data.get("role")
+        if req_role not in ("host","client"):
             return
         # Token auth — always required regardless of tunnel state.
         # host_token: never in share links → only localhost can supply it.
         # guest_token: included in share links → only allows role=client.
         import hmac
         tok = data.get("token","")
-        if role == "host":
+        if not isinstance(tok, str):
+            tok = ""
+        if req_role == "host":
             if not hmac.compare_digest(tok, _host_token):
                 await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
                 return
-        else:  # role == "client"
+        else:  # req_role == "client"
             if not hmac.compare_digest(tok, _guest_token):
                 await ws.send(json.dumps({"type":"ERROR","msg":"token inválido"}))
                 return
-        # Reject duplicate role (don't silently overwrite existing connection)
-        if role in _clients and _clients[role].open:
-            await ws.send(json.dumps({"type":"ERROR","msg":"papel já ocupado"}))
-            return
+        # Reject duplicate role if the existing connection is still alive
+        if req_role in _clients:
+            existing = _clients[req_role]
+            try:
+                alive = getattr(existing, "open", None)
+                if alive is None:
+                    # websockets ≥ 12: check via state attribute
+                    from websockets.connection import State
+                    alive = existing.state == State.OPEN
+            except Exception:
+                alive = False
+            if alive:
+                await ws.send(json.dumps({"type":"ERROR","msg":"papel já ocupado"}))
+                return
+        # All checks passed — commit to this role
+        role = req_role
         _clients[role] = ws
         other = "client" if role == "host" else "host"
         peer_ip = ws.remote_address[0] if ws.remote_address else "?"
@@ -719,7 +733,8 @@ async def ws_handler(ws):
     except Exception:
         pass
     finally:
-        if role:
+        # Only clean up if WE are the registered connection for this role
+        if role and _clients.get(role) is ws:
             label = "CONVIDADO" if role == "client" else "ANFITRIÃO"
             conn_log_add(f"[{label}] desconectou", "red" if role == "client" else "")
             _clients.pop(role, None); _mod_lists.pop(role, None)
