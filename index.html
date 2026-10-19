@@ -435,13 +435,24 @@ function doJoinGo(){
   var ip=_joinIpGlobal;
   if(!ip) return;
   var ts=new Date().toTimeString().slice(0,8);
-  jstep(3,'done','A abrir http://'+ip+':8766...');
-  jstep(4,'active','A conectar...');
-  jlog('['+ts+'] A navegar para http://'+ip+':8766','bl');
-  jlog('['+ts+'] Se o browser mostrar erro — pressiona Voltar e verifica o log acima','gl');
   document.getElementById('join-go-btn').disabled=true;
   if(_joinTimer){clearTimeout(_joinTimer);_joinTimer=null;}
-  setTimeout(function(){ location.href='http://'+ip+':8766'; }, 400);
+  // Tunnel URL (hostname.trycloudflare.com) → usar /client no Vercel
+  var isTunnel=/trycloudflare\.com/.test(ip)||/^https?:\/\//i.test(ip);
+  if(isTunnel){
+    var host=ip.replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
+    var dest=location.origin+'/client?host='+encodeURIComponent(host);
+    jstep(3,'done','Tunnel Cloudflare detectado — a ligar...');
+    jstep(4,'active','A conectar via túnel...');
+    jlog('['+ts+'] Tunnel: '+dest,'bl');
+    setTimeout(function(){ location.href=dest; }, 400);
+  } else {
+    jstep(3,'done','A abrir http://'+ip+':8766...');
+    jstep(4,'active','A conectar...');
+    jlog('['+ts+'] A navegar para http://'+ip+':8766','bl');
+    jlog('['+ts+'] Se o browser mostrar erro — pressiona Voltar e verifica o log acima','gl');
+    setTimeout(function(){ location.href='http://'+ip+':8766'; }, 400);
+  }
 }
 
 function startJoin(ip){
@@ -639,7 +650,14 @@ document.getElementById('modal-ip').addEventListener('keydown',function(e){
 function generateLink(){
   var ip=document.getElementById('my-ip-input').value.trim();
   if(!ip) return;
-  var link=location.origin+'/?join='+ip;
+  var link;
+  // Tunnel URL (https://…trycloudflare.com) → guest uses /client?host= directly
+  if(/^https?:\/\//i.test(ip)){
+    var host=ip.replace(/^https?:\/\//i,'').replace(/\/.*$/,'');
+    link=location.origin+'/client?host='+encodeURIComponent(host);
+  } else {
+    link=location.origin+'/?join='+ip;
+  }
   document.getElementById('share-link-input').value=link;
   document.getElementById('link-row').style.display='flex';
 }
@@ -839,7 +857,13 @@ function pollStatus(){
       if(d.conn_log) renderConnLog(d.conn_log);
       if(d.turn_state&&d.turn_state.round) updateTurnState(d.turn_state);
       var ipIn=document.getElementById('my-ip-input');
-      if(d.tailscale_ip){
+      if(d.tunnel_url){
+        // Cloudflare tunnel — melhor opção: funciona pela internet sem Tailscale
+        if(!ipIn.value||ipIn.value===d.local_ip||ipIn.value===d.tailscale_ip){
+          ipIn.value=d.tunnel_url;generateLink();
+        }
+        document.getElementById('ts-badge').style.display='none';
+      } else if(d.tailscale_ip){
         if(!ipIn.value||ipIn.value===d.local_ip){ipIn.value=d.tailscale_ip;generateLink();}
         document.getElementById('ts-badge').style.display='flex';
       } else if(d.local_ip&&d.local_ip!=='127.0.0.1'){

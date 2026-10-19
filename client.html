@@ -255,10 +255,14 @@ function showSuccess() {
 
 function getHostIp() {
   const h = location.hostname;
-  if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.includes('claude.ai') && !h.includes('anthropic')) return h;
+  if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.includes('vercel.app') && !h.includes('claude.ai') && !h.includes('anthropic')) return h;
   const p = new URLSearchParams(location.search).get('host');
-  if (p) return p;
+  if (p) return decodeURIComponent(p).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   return document.getElementById('ip-input').value.trim().replace(/^https?:\/\//, '').split(':')[0];
+}
+
+function isTunnelHost(ip) {
+  return ip && /trycloudflare\.com/.test(ip);
 }
 
 let _connTimeout = null;
@@ -269,16 +273,17 @@ function doConnect() {
   const btn = document.getElementById('btn');
   btn.disabled = true;
   btn.textContent = 'Conectando…';
-  setStatus('Conectando…', `ws://${ip}:${RELAY_PORT}`, 'connecting');
-  log(`Ligando a ${ip}:${RELAY_PORT}…`, 'blue');
+  const wsUrl = isTunnelHost(ip) ? `wss://${ip}` : `ws://${ip}:${RELAY_PORT}`;
+  setStatus('Conectando…', wsUrl, 'connecting');
+  log(`Ligando a ${wsUrl}…`, 'blue');
 
   // Timeout de 12s — WebSocket pode pendurar se IP inacessível
   if (_connTimeout) clearTimeout(_connTimeout);
   _connTimeout = setTimeout(() => {
     if (ws && ws.readyState !== WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `TIMEOUT 12s — sem resposta em ${ip}:${RELAY_PORT}`, c: 'red' })); } catch {}
+      try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `TIMEOUT 12s — sem resposta em ${wsUrl}`, c: 'red' })); } catch {}
       ws.close();
-      log(`Timeout (12s) — servidor não respondeu em ${ip}:${RELAY_PORT}`, 'red');
+      log(`Timeout (12s) — servidor não respondeu em ${wsUrl}`, 'red');
       log('Verificar:', 'gold');
       log('  1. O host tem o start.bat a correr?', 'gray');
       if (/^100\./.test(ip)) {
@@ -294,7 +299,7 @@ function doConnect() {
     }
   }, 12000);
 
-  try { ws = new WebSocket(`ws://${ip}:${RELAY_PORT}`); }
+  try { ws = new WebSocket(wsUrl); }
   catch (e) {
     clearTimeout(_connTimeout);
     log('Erro: ' + e.message, 'red');
@@ -305,7 +310,7 @@ function doConnect() {
   ws.onopen = () => {
     clearTimeout(_connTimeout);
     ws.send(JSON.stringify({ type: 'HELLO', role: 'client' }));
-    ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `WebSocket ligado a ${ip}:${RELAY_PORT}`, c: 'green' }));
+    ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `WebSocket ligado a ${wsUrl}`, c: 'green' }));
     ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `Browser: ${navigator.userAgent.substring(0,60)}`, c: '' }));
     log('Socket aberto. Aguardando confirmação…', 'blue');
   };
@@ -347,7 +352,7 @@ function doConnect() {
 
   ws.onerror = () => {
     clearTimeout(_connTimeout);
-    log(`Falha a ligar a ${ip}:${RELAY_PORT}`, 'red');
+    log(`Falha a ligar a ${wsUrl}`, 'red');
     if (/^100\./.test(ip)) {
       log('IP Tailscale detectado. Verifica:', 'gold');
       log('  • O host tem start.bat a correr?', 'gray');
@@ -359,7 +364,7 @@ function doConnect() {
     setStatus('Falha na ligação', 'Verifica o log para instruções', 'error');
     btn.disabled = false; btn.textContent = 'TENTAR NOVAMENTE';
     // Try to send error log even if ws might still be open briefly
-    try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `ERRO: falha WebSocket a ${ip}:${RELAY_PORT}`, c: 'red' })); } catch {}
+    try { ws.send(JSON.stringify({ type: 'CLIENT_LOG', msg: `ERRO: falha WebSocket a ${wsUrl}`, c: 'red' })); } catch {}
   };
 
   ws.onclose = (e) => {

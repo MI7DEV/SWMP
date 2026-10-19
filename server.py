@@ -96,6 +96,59 @@ def detect_local_ip():
     except Exception:
         pass
 
+async def start_cf_tunnel():
+    """Inicia um Cloudflare Quick Tunnel no porto do WebSocket relay (sem conta necessária)."""
+    global _tunnel_url, _cf_proc
+    cf_name = "cloudflared.exe" if os.name == "nt" else "cloudflared"
+    cf_path = _THIS / cf_name
+    # Tentar encontrar cloudflared no PATH primeiro
+    import shutil
+    cf_bin = shutil.which("cloudflared") or (str(cf_path) if cf_path.exists() else None)
+    if not cf_bin:
+        conn_log_add("[TUNNEL] A descarregar cloudflared...", "blue")
+        try:
+            import urllib.request
+            arch = "windows-amd64" if os.name == "nt" else "linux-amd64"
+            dl_url = f"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-{arch}.exe" \
+                     if os.name == "nt" else \
+                     f"https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-{arch}"
+            urllib.request.urlretrieve(dl_url, str(cf_path))
+            if os.name != "nt":
+                cf_path.chmod(0o755)
+            cf_bin = str(cf_path)
+            conn_log_add("[TUNNEL] cloudflared descarregado ✓", "green")
+        except Exception as e:
+            conn_log_add(f"[TUNNEL] Erro ao descarregar: {e}", "red")
+            return
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            cf_bin, "tunnel", "--url", f"http://localhost:{RELAY_PORT}", "--no-autoupdate",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        _cf_proc = proc
+        conn_log_add("[TUNNEL] A criar túnel Cloudflare...", "blue")
+        async for line_bytes in proc.stdout:
+            line = line_bytes.decode("utf-8", errors="replace").strip()
+            m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+            if m:
+                _tunnel_url = m.group(0)
+                conn_log_add(f"[TUNNEL] URL pública: {_tunnel_url}", "green")
+                print(f"  TUNEL → {_tunnel_url}")
+                break
+        # Continue draining stdout so process doesn't block
+        asyncio.create_task(_drain_cf(proc))
+    except Exception as e:
+        conn_log_add(f"[TUNNEL] Erro: {e}", "red")
+
+async def _drain_cf(proc):
+    """Descarta o stdout do cloudflared após capturar a URL."""
+    try:
+        async for _ in proc.stdout:
+            pass
+    except Exception:
+        pass
+
 def is_game_running() -> bool:
     try:
         out = subprocess.check_output(
@@ -782,6 +835,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 "my_mods":list_mods(),"pak_mods":list_paks(),
                 "ws_clients":list(_clients.keys()),
                 "turn_state":_turn_state,
+                "tunnel_url": _tunnel_url,
             }
             if from_local:
                 info["install_log"] = _install_log[-12:]
