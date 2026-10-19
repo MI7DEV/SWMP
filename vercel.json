@@ -1,12 +1,16 @@
 {
   "version": 2,
   "functions": {
-    "api/nexus.js": { "memory": 128, "maxDuration": 10 }
+    "api/**/*.js": { "memory": 128, "maxDuration": 10 }
   },
   "routes": [
-    { "src": "/api/nexus", "dest": "/api/nexus.js" },
-    { "src": "/client",   "dest": "/client.html"  },
-    { "src": "/host",     "dest": "/host.html"    },
-    { "src": "/(.*)",     "dest": "/$1"           }
+    { "src": "/api/nexus/browse",    "dest": "/api/nexus.js"           },
+    { "src": "/api/nexus/installed", "dest": "/api/nexus-installed.js" },
+    { "src": "/api/nexus",           "dest": "/api/nexus.js"           },
+    { "src": "/api/config",          "dest": "/api/config.js"          },
+    { "src": "/api/info",            "dest": "/api/info.js"            },
+    { "src": "/client",              "dest": "/client.html"            },
+    { "src": "/host",                "dest": "/host.html"              },
+    { "src": "/(.*)",                "dest": "/$1"                     }
   ]
 }

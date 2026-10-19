@@ -5,9 +5,17 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
-  const apiKey = process.env.NX_KEY;
+  // Accept key from query param (user-supplied) or fall back to server env var
+  const queryKey = req.query?.key || new URL(req.url, "http://x").searchParams.get("key") || "";
+  const apiKey = queryKey.trim() || process.env.NX_KEY || "";
+
   if (!apiKey) {
-    return res.status(500).json({ error: "API key not configured", mods: [] });
+    return res.status(200).json({
+      error: "API key obrigatória — é gratuita! Obtém em nexusmods.com → perfil → API Keys.",
+      mods: [],
+      need_key: true,
+      nexus_search: "https://www.nexusmods.com/search/?search_id=mods&q=star+wars+zero+company",
+    });
   }
 
   const headers = {
