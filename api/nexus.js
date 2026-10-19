@@ -5,9 +5,11 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
-  // Accept key from query param (user-supplied) or fall back to server env var
-  const queryKey = req.query?.key || new URL(req.url, "http://x").searchParams.get("key") || "";
-  const apiKey = queryKey.trim() || process.env.NX_KEY || "";
+  // Accept key from request header (avoids query-string exposure in logs/cache/history)
+  // Falls back to server-side env var (used when NX_KEY is set on Vercel)
+  const headerKey = (req.headers["x-nexus-key"] || "").trim();
+  const apiKey = headerKey || process.env.NX_KEY || "";
+  const usingEnvKey = !headerKey && !!process.env.NX_KEY;
 
   if (!apiKey) {
     return res.status(200).json({
@@ -59,6 +61,11 @@ export default async function handler(req, res) {
 
   mods.sort((a, b) => b.endorsement_count - a.endorsement_count);
 
-  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+  // Only cache when using the shared server-side key; user-supplied keys must not be cached
+  if (usingEnvKey) {
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+  } else {
+    res.setHeader("Cache-Control", "no-store");
+  }
   return res.status(200).json({ mods: mods.slice(0, 40) });
 }

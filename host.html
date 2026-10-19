@@ -476,7 +476,8 @@ function browseNexus(){
 
   const keyEl = document.getElementById('nx-key');
   const key = keyEl.dataset.saved === '1' ? '' : keyEl.value.trim();
-  fetch('/api/nexus/browse?key=' + encodeURIComponent(key))
+  const browseHeaders = key ? { 'X-Nexus-Key': key } : {};
+  fetch('/api/nexus/browse', { headers: browseHeaders })
     .then(r=>r.json())
     .then(data=>{
       btn.disabled=false; btn.textContent='🔍 Top 30';
