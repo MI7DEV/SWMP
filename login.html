@@ -5,47 +5,91 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SWMP — Entrar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#07090f;--bg2:#0d1117;--fg:#e2e8f0;--fg2:#94a3b8;--gold:#f5c518;--border:rgba(245,197,24,0.18);--red:#f87171}
+:root{--bg:#02030a;--fg:#e2e8f0;--fg2:#94a3b8;--gold:#ffe81f;--blue:#4fc3ff;--red:#ff3b3b;--panel:rgba(6,10,22,.78);--border:rgba(255,232,31,.22)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--fg);font-family:'Exo 2',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
-form{width:100%;max-width:340px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 24px;display:flex;flex-direction:column;gap:14px}
-h1{font-family:'Orbitron',sans-serif;font-weight:900;letter-spacing:.12em;color:var(--gold);font-size:22px;text-align:center;text-shadow:0 0 20px rgba(245,197,24,.35)}
-p{font-size:12px;color:var(--fg2);text-align:center;margin-top:-6px}
-label{font-size:12px;color:var(--fg2);display:flex;flex-direction:column;gap:6px}
-input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--fg);padding:10px 12px;font:inherit;font-size:15px}
-input:focus{outline:none;border-color:var(--gold)}
-button{background:var(--gold);color:#111;border:none;border-radius:8px;padding:11px;font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.1em;cursor:pointer}
-button:disabled{opacity:.6;cursor:wait}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:'Exo 2',system-ui,sans-serif;overflow:hidden}
+#stars{position:fixed;inset:0;width:100%;height:100%;display:block}
+.wrap{position:relative;z-index:1;min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:22px}
+.intro{font-family:'Orbitron',sans-serif;color:var(--blue);font-size:clamp(13px,2.4vw,17px);letter-spacing:.06em;text-align:center;opacity:0;animation:intro 4.2s ease forwards}
+@keyframes intro{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:.55}}
+h1{font-family:'Orbitron',sans-serif;font-weight:900;color:var(--gold);font-size:clamp(40px,10vw,74px);letter-spacing:.18em;line-height:1;
+  -webkit-text-stroke:1px rgba(0,0,0,.4);text-shadow:0 0 24px rgba(255,232,31,.35);opacity:0;transform:scale(1.8);animation:logo 1.6s 1.2s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes logo{to{opacity:1;transform:scale(1)}}
+.sub{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.35em;color:var(--fg2);text-transform:uppercase;margin-top:-10px;opacity:0;animation:fade .8s 2.4s forwards}
+form{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:26px 22px 22px;display:flex;flex-direction:column;gap:14px;
+  backdrop-filter:blur(6px);box-shadow:0 0 40px rgba(79,195,255,.08);opacity:0;transform:translateY(14px);animation:fade .9s 2.6s forwards}
+@keyframes fade{to{opacity:1;transform:none}}
+label{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--fg2);display:flex;flex-direction:column;gap:7px}
+input{background:rgba(0,0,0,.55);border:1px solid rgba(148,163,184,.25);border-radius:8px;color:var(--fg);padding:11px 12px;font:inherit;font-size:15px;letter-spacing:.02em;transition:border-color .2s,box-shadow .2s}
+input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 1px var(--blue),0 0 18px rgba(79,195,255,.45)}
+/* botão = lâmina de sabre de luz */
+.saber{position:relative;margin-top:4px;height:46px;border:none;border-radius:23px;cursor:pointer;background:#0b1020;overflow:hidden;
+  font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.3em;font-size:13px;color:#fff}
+.saber::before{content:"";position:absolute;left:10px;right:10px;top:50%;height:8px;margin-top:-4px;border-radius:4px;background:#fff;
+  box-shadow:0 0 6px #fff,0 0 14px var(--blue),0 0 28px var(--blue),0 0 46px var(--blue);transform-origin:left;transform:scaleX(0);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.saber span{position:relative;z-index:1;text-shadow:0 0 8px rgba(0,0,0,.9),0 0 2px #000}
+.saber:hover::before,.saber:focus-visible::before,.saber.on::before{transform:scaleX(1)}
+.saber.err::before{background:#fff;box-shadow:0 0 6px #fff,0 0 14px var(--red),0 0 28px var(--red),0 0 46px var(--red);transform:scaleX(1)}
+.saber:disabled{cursor:wait}
 #err{color:var(--red);font-size:13px;text-align:center;min-height:16px}
+.foot{font-size:10px;letter-spacing:.25em;color:rgba(148,163,184,.55);text-transform:uppercase;opacity:0;animation:fade 1s 3s forwards}
+@media (prefers-reduced-motion:reduce){.intro,h1,.sub,form,.foot{animation:none;opacity:1;transform:none}}
 </style>
 </head>
 <body>
-<form id="f">
+<canvas id="stars"></canvas>
+<div class="wrap">
+  <div class="intro">Numa galáxia muito, muito distante…</div>
   <h1>SWMP</h1>
-  <p>Acesso restrito</p>
-  <label>Utilizador<input id="u" autocomplete="username" autocapitalize="none" required></label>
-  <label>Senha<input id="p" type="password" autocomplete="current-password" required></label>
-  <button id="b" type="submit">ENTRAR</button>
-  <div id="err"></div>
-</form>
+  <div class="sub">Zero Company · acesso restrito</div>
+  <form id="f">
+    <label>Piloto<input id="u" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label>Código de acesso<input id="p" type="password" autocomplete="current-password" required></label>
+    <button class="saber" id="b" type="submit"><span>ENTRAR</span></button>
+    <div id="err"></div>
+  </form>
+  <div class="foot">Que a Força esteja contigo</div>
+</div>
 <script>
+// Campo de estrelas em movimento (salto para o hiperespaço ao entrar)
+(function(){
+  var c=document.getElementById('stars'), x=c.getContext('2d'), S=[], W, H, speed=0.6, warp=false;
+  function size(){ W=c.width=innerWidth*devicePixelRatio; H=c.height=innerHeight*devicePixelRatio; }
+  size(); addEventListener('resize',size);
+  for(var i=0;i<700;i++) S.push({x:Math.random()*2-1,y:Math.random()*2-1,z:Math.random()});
+  window._warp=function(){ warp=true; };
+  (function tick(){
+    if(warp) speed=Math.min(speed*1.08+0.2,40);
+    x.fillStyle=warp?'rgba(2,3,10,.25)':'#02030a'; x.fillRect(0,0,W,H);
+    for(var i=0;i<S.length;i++){
+      var s=S[i], pz=s.z; s.z-=0.002*speed; if(s.z<=0.01){ s.x=Math.random()*2-1; s.y=Math.random()*2-1; s.z=1; pz=1; }
+      var k=0.5/s.z, sx=W/2+s.x*k*W/2, sy=H/2+s.y*k*H/2, kp=0.5/pz, px=W/2+s.x*kp*W/2, py=H/2+s.y*kp*H/2;
+      var a=Math.min(1,(1-s.z)*1.4);
+      x.strokeStyle='rgba(220,235,255,'+a+')'; x.lineWidth=Math.max(0.6,(1-s.z)*2.2*devicePixelRatio);
+      x.beginPath(); x.moveTo(px,py); x.lineTo(sx+(warp?0:0.6),sy); x.stroke();
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+
 // só volta para páginas deste mesmo site
 var next='/';
 try{ var u=new URL(new URLSearchParams(location.search).get('next')||'/',location.origin); if(u.origin===location.origin) next=u.href; }catch(e){}
 document.getElementById('f').addEventListener('submit',async function(ev){
   ev.preventDefault();
   var b=document.getElementById('b'), err=document.getElementById('err');
-  b.disabled=true; err.textContent='';
+  b.disabled=true; b.classList.remove('err'); b.classList.add('on'); err.textContent='';
   try{
     var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user:document.getElementById('u').value,pass:document.getElementById('p').value})});
-    if(r.ok){ location.replace(next); return; }
+    if(r.ok){ window._warp(); setTimeout(function(){ location.replace(next); },900); return; }
     var d=await r.json().catch(function(){return {};});
-    err.textContent=d.error||'Não foi possível entrar';
-  }catch(e){ err.textContent='Sem ligação ao servidor'; }
-  b.disabled=false;
+    err.textContent=d.error||'Acesso negado';
+  }catch(e){ err.textContent='Sem ligação à base'; }
+  b.classList.remove('on'); b.classList.add('err'); b.disabled=false;
 });
 </script>
 </body>

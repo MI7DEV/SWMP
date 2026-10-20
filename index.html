@@ -384,6 +384,12 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg);margin-bottom:14px;cursor:pointer">
       <input type="checkbox" id="mus-mute" checked> Silenciar a música original do jogo enquanto a trilha toca (volta sozinha ao desligar ou fechar a página)
     </label>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="install-btn" id="mus-pack" style="flex:0 0 auto;padding:8px 14px">⭐ INSTALAR PACOTE ÉPICO (22 músicas grátis)</button>
+      <span style="font-size:11px;color:var(--fg2);line-height:1.5">Holst “Marte” (a inspiração da Marcha Imperial) no menu, Júpiter/Neptuno/Saturno na base, temas épicos no combate.
+        Músicas livres: Holst/Wagner (domínio público, Wikimedia Commons) e Kevin MacLeod (incompetech.com, licença CC BY 4.0).
+        Para a Marcha Imperial original, usa <b style="color:var(--fg)">+ TROCAR</b> em “Tema do menu principal” com o teu MP3.</span>
+    </div>
     <div id="mus-count" style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:8px"></div>
     <div id="mus-lists" style="display:flex;flex-direction:column;gap:8px"></div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
@@ -1616,6 +1622,57 @@ async function _musLoad(){
   _musRender();
 }
 
+
+// Pacote pronto (licenças livres): domínio público (Wikimedia Commons) + Kevin MacLeod (CC BY 4.0, alojado em /music)
+var MUS_PACK=[
+  {slot:'Shell_01',name:'Holst — Marte, o Portador da Guerra (US Air Force Band)',url:'https://upload.wikimedia.org/wikipedia/commons/8/85/Holst-_mars.ogg',credit:'Domínio público'},
+  {slot:'all:hub',name:'Holst — Júpiter (US Air Force Band)',url:'https://upload.wikimedia.org/wikipedia/commons/e/e2/Holst_The_Planets_Jupiter.ogg',credit:'Domínio público'},
+  {slot:'all:hub',name:'Holst — Neptuno (U.S. Marine Band)',url:'https://upload.wikimedia.org/wikipedia/commons/c/c8/HOLST_%22The_Planets%2C_Op._32_7._Neptune%2C_the_Mystic%22_-_%22The_President%27s_Own%22_U.S._Marine_Band.opus',credit:'Domínio público'},
+  {slot:'all:hub',name:'Holst — Saturno (U.S. Marine Band)',url:'https://upload.wikimedia.org/wikipedia/commons/5/5c/HOLST_%22The_Planets%2C_Op._32_5._Saturn%2C_the_Bringer_of_Old_Age%22_-_%22The_President%27s_Own%22_U.S._Marine_Band.opus',credit:'Domínio público'},
+  {slot:'all:hub',name:'Crossing the Chasm',url:'/music/Crossing_the_Chasm.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:explore',name:'Lightless Dawn',url:'/music/Lightless_Dawn.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:explore',name:'Hidden Agenda',url:'/music/Hidden_Agenda.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:explore',name:'Dark Times',url:'/music/Dark_Times.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:explore',name:'Interloper',url:'/music/Interloper.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:explore',name:'The Descent',url:'/music/The_Descent.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Wagner — Cavalgada das Valquírias',url:'https://upload.wikimedia.org/wikipedia/commons/2/29/Richard_Wagner_-_Ride_of_the_Valkyries.ogg',credit:'Domínio público'},
+  {slot:'all:combat',name:'Crusade',url:'/music/Crusade.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Five Armies',url:'/music/Five_Armies.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Volatile Reaction',url:'/music/Volatile_Reaction.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Heroic Age',url:'/music/Heroic_Age.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Prelude and Action',url:'/music/Prelude_and_Action.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Rising Game',url:'/music/Rising_Game.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:combat',name:'Achilles',url:'/music/Achilles.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:boss',name:'Holst — Marte (chefes)',url:'https://upload.wikimedia.org/wikipedia/commons/8/85/Holst-_mars.ogg',credit:'Domínio público'},
+  {slot:'all:boss',name:'Stormfront',url:'/music/Stormfront.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:boss',name:'Firebrand',url:'/music/Firebrand.mp3',credit:'Kevin MacLeod'},
+  {slot:'all:boss',name:'Darkest Child',url:'/music/Darkest_Child.mp3',credit:'Kevin MacLeod'}
+];
+
+async function _musInstallPack(btn){
+  var have=(await _idbGet('mus:pack'))||{};
+  var done=0, fail=0;
+  btn.disabled=true;
+  for(var i=0;i<MUS_PACK.length;i++){
+    var P=MUS_PACK[i], key=P.slot+'|'+P.url;
+    btn.textContent='A transferir '+(i+1)+'/'+MUS_PACK.length+'…';
+    if(have[key]&&_mus.names[have[key]]){ done++; continue; }
+    try{
+      var r=await fetch(P.url); if(!r.ok) throw new Error(r.status);
+      var blob=await r.blob();
+      var id=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      await _idbSet('mus:t:'+id,{name:P.name,blob:blob});
+      _mus.names[id]=P.name; (_mus.map[P.slot]=_mus.map[P.slot]||[]).push(id);
+      have[key]=id; done++;
+      await _idbSet('mus:map',_mus.map); await _idbSet('mus:pack',have);
+    }catch(e){ fail++; }
+  }
+  _mus.order={}; btn.disabled=false;
+  btn.textContent=fail?'⭐ PACOTE: '+done+' OK · '+fail+' falharam (tenta de novo)':'⭐ PACOTE INSTALADO ('+done+' músicas)';
+  _musRender();
+  if(_mus.on&&_musTarget().key!==_mus.playingKey) _musNext();
+}
+
 function _musSlotCount(g){ var n=0; g.tracks.forEach(function(t){ if((_mus.map[t[0]]||[]).length) n++; }); return n; }
 
 function _musRow(key,label,sub){
@@ -1778,13 +1835,17 @@ async function _musPlay(){
   var T=_musTarget();
   var id=_musPick(T.key,T.ids);
   if(!id){ document.getElementById('mus-now').textContent='Escolhe pelo menos uma música para trocar (botão + TROCAR).'; return; }
+  var tok=_mus.tok=(_mus.tok||0)+1;   // trocas seguidas: só a mais recente conta
   var t=await _idbGet('mus:t:'+id);
+  if(tok!==_mus.tok) return;
   if(!t){ return _musNext(); }
   var nextI=1-_mus.cur, old=_mus.els[_mus.cur], nu=_mus.els[nextI];
   if(_mus.url[nextI]) URL.revokeObjectURL(_mus.url[nextI]);
   _mus.url[nextI]=URL.createObjectURL(t.blob);
   nu.src=_mus.url[nextI]; nu.volume=0; nu.onended=function(){ if(_mus.els[_mus.cur]===nu) _musNext(); };
-  try{ await nu.play(); }catch(e){ _musHint('O browser bloqueou o áudio — clica em ▶ LIGAR.'); return; }
+  try{ await nu.play(); }catch(e){ if(tok===_mus.tok) _musHint('O browser bloqueou o áudio — clica em ▶ LIGAR.'); return; }
+  if(tok!==_mus.tok) return;
+  _musHint('');
   _mus.cur=nextI; _mus.playing=id; _mus.playingKey=T.key;
   _musFade(nu,_mus.vol,MUS_FADE_MS);
   if(!old.paused) _musFade(old,0,MUS_FADE_MS,function(){old.pause();});
@@ -1795,6 +1856,7 @@ async function _musPlay(){
 function _musNext(){ if(_mus.on) _musPlay(); }
 
 function _musStop(){
+  _mus.tok=(_mus.tok||0)+1;
   _mus.els.forEach(function(el){ _musFade(el,0,800,function(){el.pause();}); });
   _mus.playing=null; _mus.playingKey='';
   document.getElementById('mus-now').textContent='—';
@@ -1868,6 +1930,7 @@ async function _musCtrl(force){
 }
 
 document.getElementById('mus-play').addEventListener('click',_musToggle);
+document.getElementById('mus-pack').addEventListener('click',function(){_musInstallPack(this);});
 document.getElementById('mus-next').addEventListener('click',_musNext);
 document.getElementById('mus-mode').addEventListener('change',function(){_musSceneLabel();if(_mus.on&&_musTarget().key!==_mus.playingKey)_musNext();});
 document.getElementById('mus-vol').addEventListener('input',function(){
