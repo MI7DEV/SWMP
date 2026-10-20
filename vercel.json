@@ -13,6 +13,7 @@
     { "src": "/api/health",          "dest": "/api/health.js"          },
     { "src": "/api/nexus-cdn",       "dest": "/api/nexus-cdn.js"       },
     { "src": "/api/megagames-mods",  "dest": "/api/megagames-mods.js"  },
+    { "src": "/api/megagames-zip",   "dest": "/api/megagames-zip.js"   },
     { "src": "/client",              "dest": "/client.html"            },
     { "src": "/host",                "dest": "/host.html"              },
     { "src": "/(.*)",                "dest": "/$1"                     }

@@ -1500,10 +1500,13 @@ function renderMegaGrid(){
 async function megaInstall(mod,btn){
   if(_megaInstalling.has(mod.slug)) return;
   _megaInstalling.add(mod.slug);
-  btn.textContent='A baixar...';btn.disabled=true;btn.style.opacity='0.7';
+  btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
   try{
-    // Download direto da primeira URL ZIP
-    var zipUrl=mod.first_zip||mod.zips[0];
+    // Busca ZIP URL on-demand (evita timeout do Vercel com fetch de 14 páginas)
+    var zipMeta=await fetch('/api/megagames-zip?slug='+encodeURIComponent(mod.slug),{signal:AbortSignal.timeout(20000)}).then(function(r){return r.json();});
+    if(!zipMeta.zip_url) throw new Error(zipMeta.error||'ZIP não encontrado');
+    var zipUrl=zipMeta.zip_url;
+    btn.textContent='A baixar...';
     if(!zipUrl) throw new Error('Sem URL de download');
     var resp=await fetch(zipUrl,{signal:AbortSignal.timeout(300000)});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
