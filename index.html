@@ -1182,8 +1182,9 @@ function renderGrid(){
         '<div class="mod-desc"></div>'+
       '</div>'+
       '<div class="mod-footer">'+
-        (_isHost ? '<button class="install-btn'+(inst?' installed':'')+'">'+
-          (inst?'↩ DESINSTALAR':'INSTALAR')+'</button>' : '')+
+        '<button class="install-btn'+(inst?' installed':'')+'">'+
+          (inst?'↩ DESINSTALAR':'INSTALAR')+
+        '</button>'+
         '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">Ver no Nexus →</a>'+
       '</div>';
 
@@ -1193,20 +1194,24 @@ function renderGrid(){
     var imgEl=card.querySelector('img[data-src]');
     if(imgEl){ imgEl.src=imgEl.dataset.src; imgEl.removeAttribute('data-src'); }
 
-    if(_isHost){
-      var btn=card.querySelector('.install-btn');
-      if(btn){
-        if(inst){
-          if(_uninstalling.has(m.name)){btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';}
-          (function(modName,b){
-            b.addEventListener('click',function(){ uninstallMod(modName,b); });
-          })(m.name,btn);
-        } else {
-          if(_installing.has(m.mod_id)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
-          (function(modId,modName,b){
-            b.addEventListener('click',function(){ installMod(modId,modName,b); });
-          })(m.mod_id,m.name,btn);
-        }
+    var btn=card.querySelector('.install-btn');
+    if(btn){
+      if(inst){
+        if(_isHost&&_uninstalling.has(m.name)){btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';}
+        (function(modName,b){
+          b.addEventListener('click',function(){
+            if(!_isHost){_hipShow();return;}
+            uninstallMod(modName,b);
+          });
+        })(m.name,btn);
+      } else {
+        if(_isHost&&_installing.has(m.mod_id)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
+        (function(modId,modName,b){
+          b.addEventListener('click',function(){
+            if(!_isHost){_hipShow();return;}
+            installMod(modId,modName,b);
+          });
+        })(m.mod_id,m.name,btn);
       }
     }
     grid.appendChild(card);
