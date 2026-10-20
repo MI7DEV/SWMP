@@ -965,7 +965,11 @@ class _HTTP(BaseHTTPRequestHandler):
         f"http://localhost:{HTTP_PORT}",
         f"http://127.0.0.1:{HTTP_PORT}",
         "https://swmp-six.vercel.app",
+        "https://swmp-mi7-7798s-projects.vercel.app",
     }
+    # Matches preview deployment URLs for this specific project+team only
+    _VERCEL_PREVIEW_RE = re.compile(
+        r'^https://swmp-[a-z0-9]+-mi7-7798s-projects\.vercel\.app$')
     _SAFE_HOSTS = {f"localhost:{HTTP_PORT}", f"127.0.0.1:{HTTP_PORT}"}
 
     def _is_trusted_origin(self, origin: str) -> bool:
@@ -973,9 +977,9 @@ class _HTTP(BaseHTTPRequestHandler):
             return True
         if origin in self._SAFE_ORIGINS:
             return True
-        # Accept any *.vercel.app origin from loopback (the real guard is from_local)
+        # Accept only preview URLs from this specific Vercel project+team from loopback
         from_local = self.client_address[0] in ("127.0.0.1", "::1")
-        return from_local and origin.startswith("https://") and origin.endswith(".vercel.app")
+        return from_local and bool(self._VERCEL_PREVIEW_RE.match(origin))
 
     def _origin_ok(self) -> bool:
         return self._is_trusted_origin(self.headers.get("Origin", ""))
@@ -1166,8 +1170,25 @@ async def _nx_install_http(mod_id: int, mod_name: str):
     await _nx_install_ws(_MockWS(), mod_id, mod_name, api_key, file_id)
 
 
+_NEXUS_CDN_HOSTS = frozenset({
+    "nexus-cdn.com", "cf-files.nexus-cdn.com", "files.nexus-cdn.com",
+    "supporter-files.nexus-cdn.com", "premium-files.nexus-cdn.com",
+    "staticdelivery.nexusmods.com",
+})
+
 async def _install_from_url(url: str, mod_name: str):
-    """Download mod from a direct CDN URL and install it (no Nexus auth needed)."""
+    """Download mod from a Nexus CDN URL and install it (no Nexus auth needed)."""
+    # SSRF guard: only allow known Nexus CDN hosts, no non-standard ports
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme != "https" or not host or \
+           not (host in _NEXUS_CDN_HOSTS or host.endswith(".nexus-cdn.com")):
+            await _ilog("URL rejeitada: host não autorizado", "red"); return
+        if parsed.port is not None:
+            await _ilog("URL rejeitada: porta não padrão", "red"); return
+    except Exception:
+        await _ilog("URL de download inválida", "red"); return
     global _install_status
     _install_status = "running"
     await _ilog(f"A baixar '{mod_name}'...", "blue")
