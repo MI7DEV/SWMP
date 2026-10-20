@@ -1,8 +1,45 @@
 /**
  * Busca o URL direto do ZIP de um mod no MegaGames.
- * Recebe ?slug=<slug> e faz scraping de UMA página.
- * Timeout curto (10s) é suficiente para uma única página.
+ * Recebe ?slug=<slug> (deve estar na KNOWN_SLUGS) e faz scraping de UMA página.
  */
+
+// Slugs válidos — mesma lista de megagames-mods.js; slug não listado é rejeitado.
+const KNOWN_SLUGS = new Set([
+  "star-wars-zero-company-cheaper-actions-mod-v1-3-1",
+  "star-wars-zero-company-swift-combat-and-retaliation-mod-v2-2-0",
+  "star-wars-zero-company-skip-tutorial-level-and-permadeath-and-beskar-switcher-mod-v1-0",
+  "star-wars-zero-company-fast-resonance-mod-v1-0-2",
+  "star-wars-zero-company-mission-and-campaign-time-control-mod-v1-0",
+  "star-wars-zero-company-all-player-weapon-buff-mod-v1-0",
+  "star-wars-zero-company-more-contacts-mod-v1-0",
+  "star-wars-zero-company-more-capacitors-mod-v1-0",
+  "star-wars-zero-company-upgrade-discounts-and-durations-mod-v2-0",
+  "star-wars-zero-company-blackmarket-discounts-mod-v2-0",
+  "star-wars-zero-company-operations-tweaks-mod-v5-0",
+  "star-wars-zero-company-ultimate-engine-tweaks-anti-stutters-more-performance-lower-latency-better-clarity-lossless-mod-v1-0",
+  "star-wars-zero-company-full-customization-mod-mandalorian-padawan-and-more-mod-v1-3",
+  "star-wars-zero-company-ue4ss-for-star-wars-zero-company-mod-v1-0",
+]);
+
+// Hostnames permitidos para URLs de download
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  "megagames.com",
+  "www.megagames.com",
+  "618b31e8.delivery.rocketcdn.me",
+]);
+
+function isSafeDownloadUrl(raw) {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return false;
+    if (!ALLOWED_DOWNLOAD_HOSTS.has(u.hostname)) return false;
+    if (!/\.(zip|rar|7z|pak)(\?|$)/i.test(u.pathname + u.search)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "s-maxage=3600");
@@ -12,9 +49,9 @@ module.exports = async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const slug = (req.query.slug || "").trim().replace(/[^a-z0-9-]/gi, "");
-  if (!slug) {
-    return res.status(400).json({ error: "slug obrigatório" });
+  const slug = (req.query.slug || "").trim();
+  if (!slug || !KNOWN_SLUGS.has(slug)) {
+    return res.status(400).json({ error: "slug inválido ou não reconhecido" });
   }
 
   const pageUrl = `https://megagames.com/mods/${slug}`;
@@ -36,21 +73,23 @@ module.exports = async function handler(req, res) {
 
     const html = await pageRes.text();
 
-    // Extrai todos os links de ZIP/RAR/7z do RocketCDN ou qualquer domínio
-    const zipRe = /href="(https?:\/\/[^"]+\.(?:zip|rar|7z|pak)(?:\?[^"]*)?)"/gi;
+    // Extrai candidatos a ZIP/RAR/7z/pak do HTML
+    const zipRe = /href="(https?:\/\/[^"<>\s]+\.(?:zip|rar|7z|pak)(?:\?[^"<>\s]*)?)"/gi;
     const zips = [];
     let m;
     while ((m = zipRe.exec(html)) !== null) {
       const u = m[1];
-      if (!zips.includes(u)) zips.push(u);
+      if (isSafeDownloadUrl(u) && !zips.includes(u)) zips.push(u);
     }
 
     if (!zips.length) {
       return res.status(404).json({ error: "Nenhum ZIP encontrado nesta página", page_url: pageUrl });
     }
 
-    // Prefere links do RocketCDN (CDN direto do MegaGames)
-    const rocketZips = zips.filter(u => u.includes("rocketcdn") || u.includes("delivery.rocketcdn"));
+    // Prefere RocketCDN (CDN oficial do MegaGames)
+    const rocketZips = zips.filter(u => {
+      try { return new URL(u).hostname.endsWith("rocketcdn.me"); } catch { return false; }
+    });
     const firstZip = rocketZips[0] || zips[0];
 
     return res.status(200).json({ zip_url: firstZip, all_zips: zips, page_url: pageUrl });
