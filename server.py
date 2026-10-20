@@ -26,12 +26,17 @@ _ROOTS = [
 ]
 GAME_ROOT   = next((p for p in _ROOTS if (p / "SWZeroCompany.exe").exists()), None)
 WIN64       = (GAME_ROOT / "SWZeroCompany/Binaries/Win64") if GAME_ROOT else None
-MOD_DIR     = (WIN64 / "Mods/ZeroCompanyMP") if WIN64 else None
-MODS_DIR    = (WIN64 / "Mods") if WIN64 else None
+# UE4SS 3.x: mods em Win64/ue4ss/Mods/<Mod>/Scripts/main.lua
+MODS_DIR    = (WIN64 / "ue4ss/Mods") if WIN64 else None
+MOD_DIR     = (MODS_DIR / "ZeroCompanyMP") if MODS_DIR else None
+MP_IO_DIR   = (MOD_DIR / "Scripts") if MOD_DIR else None   # main.lua troca ficheiros na sua própria pasta
 PAK_DIR     = (GAME_ROOT / "SWZeroCompany/Content/Paks/~mods") if GAME_ROOT else None
-CMD_FILE    = (MOD_DIR / "mp_command.json") if MOD_DIR else None
-RESULT_FILE = (MOD_DIR / "mp_result.json")  if MOD_DIR else None
-SYNC_OUT    = (MOD_DIR / "mp_sync_out.json")if MOD_DIR else None
+CMD_FILE    = (MP_IO_DIR / "mp_command.json") if MP_IO_DIR else None
+RESULT_FILE = (MP_IO_DIR / "mp_result.json")  if MP_IO_DIR else None
+SYNC_OUT    = (MP_IO_DIR / "mp_sync_out.json")if MP_IO_DIR else None
+# Build da UE4SS compatível com este jogo (a release genérica do GitHub falha o scan: "PS scan timed out")
+UE4SS_URL   = ("https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/"
+               "UE4SS_v3.0.1-1092_for_StarWarsZeroCompany_v1.0.zip")
 DOWNLOADS   = Path.home() / "Downloads"
 
 # ─── Estado global ────────────────────────────────────────────────────────────
@@ -169,7 +174,7 @@ def list_mods() -> list:
     skip = {"ZeroCompanyMP", "shared", "keybinds"}
     mods = []
     for d in MODS_DIR.iterdir():
-        if d.is_dir() and d.name not in skip and (d / "main.lua").exists():
+        if d.is_dir() and d.name not in skip and ((d / "Scripts/main.lua").exists() or (d / "main.lua").exists()):
             mods.append(d.name)
     return sorted(mods)
 
@@ -196,34 +201,24 @@ async def _ilog(msg: str, c: str = ""):
         await broadcast({"type": "LOG", "msg": msg, "c": c}, only="host")
 
 def _download_ue4ss(win64: Path):
-    api_url = "https://api.github.com/repos/UE4SS-RE/RE-UE4SS/releases/latest"
-    req = urllib.request.Request(api_url, headers={
-        "User-Agent": "ZeroCompanyMP/1.0", "Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        release = json.loads(r.read())
-    asset_url = None
-    for a in release.get("assets", []):
-        n = a["name"].lower()
-        if n.endswith(".zip") and "ue4ss" in n and "xinput" not in n and "dev" not in n:
-            asset_url = a["browser_download_url"]; break
-    if not asset_url:
-        raise RuntimeError("Asset UE4SS.zip não encontrado.")
     with urllib.request.urlopen(
-            urllib.request.Request(asset_url, headers={"User-Agent": "ZeroCompanyMP/1.0"}),
+            urllib.request.Request(UE4SS_URL, headers={"User-Agent": "Mozilla/5.0 ZeroCompanyMP/1.0"}),
             timeout=180) as r:
         data = r.read()
     win64.mkdir(parents=True, exist_ok=True)
+    # Remove a UE4SS genérica antiga (layout na raiz do Win64), que não arranca neste jogo
+    for old in ("UE4SS.dll", "UE4SS-settings.ini"):
+        try: (win64 / old).unlink()
+        except FileNotFoundError: pass
+    keep_mods_txt = (win64 / "ue4ss/Mods/mods.txt").exists()
     with zipfile.ZipFile(io.BytesIO(data)) as z:
-        names = z.namelist()
-        prefix = ""
-        tops = {n.split("/")[0] for n in names if n.strip("/")}
-        if len(tops) == 1:
-            cand = list(tops)[0] + "/"
-            if all(n.startswith(cand) or n == cand for n in names):
-                prefix = cand
-        for member in names:
-            rel = member[len(prefix):]
-            if not rel or rel.endswith("/"):
+        for member in z.namelist():
+            rel = member.replace("\\", "/")
+            if not rel or rel.endswith("/") or rel.lower().startswith("readme"):
+                continue
+            if ".." in rel.split("/"):
+                continue
+            if keep_mods_txt and rel.lower() == "ue4ss/mods/mods.txt":
                 continue
             dst = win64 / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -234,14 +229,15 @@ def _install_mp_mod(win64: Path, mod_dst: Path):
     mod_src = Path(__file__).parent / "ue4ss_mods" / "ZeroCompanyMP"
     if not mod_src.exists():
         raise RuntimeError(f"Pasta de mod não encontrada: {mod_src}")
-    mod_dst.mkdir(parents=True, exist_ok=True)
+    scripts = mod_dst / "Scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
     for f in mod_src.rglob("*"):
         if f.is_file():
-            dst = mod_dst / f.relative_to(mod_src)
+            dst = scripts / f.relative_to(mod_src)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
     (mod_dst / "enabled.txt").write_text("", encoding="utf-8")
-    mods_txt = win64 / "Mods" / "mods.txt"
+    mods_txt = MODS_DIR / "mods.txt"
     entry = "ZeroCompanyMP : 1"
     if mods_txt.exists():
         content = mods_txt.read_text(encoding="utf-8")
@@ -257,8 +253,8 @@ async def auto_install():
         await _ilog("Jogo não encontrado.", "gold"); return
     _install_status = "running"
     await _ilog("🔧 Verificando instalação...", "blue")
-    if not (WIN64 / "dwmapi.dll").exists():
-        await _ilog("UE4SS não encontrado — a baixar...", "blue")
+    if not (WIN64 / "ue4ss/UE4SS.dll").exists():
+        await _ilog("UE4SS compatível não encontrada — a baixar...", "blue")
         try:
             await asyncio.to_thread(_download_ue4ss, WIN64)
             await _ilog("✓ UE4SS instalado.", "green")
@@ -266,7 +262,7 @@ async def auto_install():
             await _ilog(f"✗ Erro UE4SS: {e}", "red"); _install_status = "failed"; return
     else:
         await _ilog("✓ UE4SS já instalado.", "green")
-    if MOD_DIR and not (MOD_DIR / "main.lua").exists():
+    if MOD_DIR and not (MOD_DIR / "Scripts/main.lua").exists():
         await _ilog("A instalar mod ZeroCompanyMP...", "blue")
         try:
             await asyncio.to_thread(_install_mp_mod, WIN64, MOD_DIR)

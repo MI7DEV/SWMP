@@ -265,7 +265,7 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     <div class="logo-sub">Star Wars Zero Company</div>
   </div>
   <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
-    <button id="btn-set-folder" onclick="_setModsFolder()" title="Selecionar pasta de mods" style="padding:5px 12px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);border-radius:6px;color:var(--gold);font-size:11px;cursor:pointer;letter-spacing:.05em;white-space:nowrap">📁 PASTA DE MODS</button>
+    <button id="btn-set-folder" onclick="_setModsFolder()" title="Selecionar pasta do jogo" style="padding:5px 12px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);border-radius:6px;color:var(--gold);font-size:11px;cursor:pointer;letter-spacing:.05em;white-space:nowrap">📁 PASTA DO JOGO</button>
     <div class="conn-dot">
       <div class="dot" id="srv-dot"></div>
       <span id="srv-label">Servidor</span>
@@ -386,8 +386,8 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
   <!-- ── MegaGames: download direto, sem conta, sem servidor ── -->
   <div id="mega-section" style="margin-top:32px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      Download Direto <span style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px" id="mega-count">A carregar...</span>
-      <span style="font-size:10px;color:var(--fg2);font-family:'Exo 2',sans-serif;letter-spacing:.04em">— sem conta Nexus, sem servidor</span>
+      Instalação Automática <span style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px" id="mega-count">A carregar...</span>
+      <span style="font-size:10px;color:var(--fg2);font-family:'Exo 2',sans-serif;letter-spacing:.04em">— 1 clique, sem conta, sem servidor. 1ª vez: escolhe a pasta do jogo (Chrome/Edge)</span>
       <button id="btn-mega-import" onclick="megaImportAll()" style="margin-left:auto;padding:6px 16px;background:rgba(34,197,94,.1);border:1.5px solid #22c55e;border-radius:20px;color:#22c55e;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;cursor:pointer;white-space:nowrap">
         <span id="mega-import-label">⬇ INSTALAR TODOS</span>
       </button>
@@ -1089,58 +1089,261 @@ function _openIdb(){
 function _idbGet(k){return _openIdb().then(function(db){return new Promise(function(res,rej){var r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}).catch(function(){return null;});}
 function _idbSet(k,v){return _openIdb().then(function(db){return new Promise(function(res,rej){var r=db.transaction('kv','readwrite').objectStore('kv').put(v,k);r.onsuccess=function(){res();};r.onerror=function(){rej(r.error);};});}).catch(function(){});}
 
-var _modsDir=null; // FileSystemDirectoryHandle em memória
+// ─── Instalador no browser (File System Access API) ──────────────────────────
+// O utilizador escolhe UMA vez a pasta do jogo (…\steamapps\common\Star Wars Zero Company).
+// Cada ZIP é analisado e os ficheiros vão para o sítio certo:
+//   .pak/.ucas/.utoc        → SWZeroCompany\Content\Paks\~mods\
+//   mod UE4SS (Lua/DLL)     → SWZeroCompany\Binaries\Win64\ue4ss\Mods\<Mod>\  (+ mods.txt)
+//   UE4SS (dwmapi.dll)      → SWZeroCompany\Binaries\Win64\
+//   Engine.ini              → %LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows\
+var _modsDir=null;   // handle da pasta SWZeroCompany (dentro da pasta do jogo)
+var _cfgDir=null;    // handle de %LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows
+var WIN64_PATH='Binaries/Win64';
+var UE4SS_MODS='Binaries/Win64/ue4ss/Mods';
+var PAK_MODS='Content/Paks/~mods';
+var GAME_HINT='D:\\SteamLibrary\\steamapps\\common\\Star Wars Zero Company';
+var CFG_HINT='%LOCALAPPDATA%\\SWZeroCompany\\Saved\\Config\\Windows';
+
+async function _hasEntry(dir,name,kind){
+  try{
+    if(kind==='dir') await dir.getDirectoryHandle(name); else await dir.getFileHandle(name);
+    return true;
+  }catch(e){return false;}
+}
+
+// Aceita a pasta raiz do jogo ou a subpasta SWZeroCompany; devolve o handle de SWZeroCompany
+async function _resolveGameDir(h){
+  if(await _hasEntry(h,'Binaries','dir')&&await _hasEntry(h,'Content','dir')) return h;
+  if(await _hasEntry(h,'SWZeroCompany','dir')){
+    var sub=await h.getDirectoryHandle('SWZeroCompany');
+    if(await _hasEntry(sub,'Binaries','dir')) return sub;
+  }
+  return null;
+}
+
+async function _ensurePerm(h){
+  var p=await h.queryPermission({mode:'readwrite'});
+  if(p!=='granted') p=await h.requestPermission({mode:'readwrite'});
+  return p==='granted';
+}
 
 async function _getModsDir(forceAsk){
-  if(!window.showDirectoryPicker) return null;
-  if(!forceAsk&&_modsDir){
-    try{
-      var p=await _modsDir.queryPermission({mode:'readwrite'});
-      if(p==='granted') return _modsDir;
-    }catch(e){}
+  if(!window.showDirectoryPicker){
+    alert('O teu browser não permite instalar mods diretamente.\nUsa o Google Chrome ou Microsoft Edge no PC.');
+    return null;
   }
-  // Tentar handle guardado no IndexedDB
+  if(!forceAsk&&_modsDir){
+    try{ if(await _ensurePerm(_modsDir)) return _modsDir; }catch(e){}
+  }
   if(!forceAsk){
     try{
-      var h=await _idbGet('mods_dir');
-      if(h){
-        var p2=await h.queryPermission({mode:'readwrite'});
-        if(p2!=='granted') p2=await h.requestPermission({mode:'readwrite'});
-        if(p2==='granted'){_modsDir=h;return h;}
-      }
+      var h=await _idbGet('game_dir');
+      if(h&&await _ensurePerm(h)){_modsDir=h;_updateFolderBtn();return h;}
     }catch(e){}
   }
-  // Pedir ao utilizador
-  var sel=await window.showDirectoryPicker({mode:'readwrite',id:'swmp-mods',startIn:'documents'});
-  _modsDir=sel;
-  await _idbSet('mods_dir',sel);
+  alert('Seleciona a pasta do jogo Star Wars Zero Company.\n\nNormalmente:\n'+GAME_HINT+'\n(ou C:\\Program Files (x86)\\Steam\\steamapps\\common\\Star Wars Zero Company)\n\nSó é preciso fazer isto uma vez.');
+  var sel=await window.showDirectoryPicker({mode:'readwrite',id:'swmp-game',startIn:'desktop'});
+  var game=await _resolveGameDir(sel);
+  if(!game){
+    alert('Esta pasta não é a do jogo (não tem SWZeroCompany\\Binaries).\nEscolhe a pasta "Star Wars Zero Company" dentro de steamapps\\common.');
+    return null;
+  }
+  _modsDir=game;
+  await _idbSet('game_dir',game);
+  _updateFolderBtn();
+  return game;
+}
+
+async function _getCfgDir(){
+  if(_cfgDir){ try{ if(await _ensurePerm(_cfgDir)) return _cfgDir; }catch(e){} }
+  try{
+    var h=await _idbGet('cfg_dir');
+    if(h&&await _ensurePerm(h)){_cfgDir=h;return h;}
+  }catch(e){}
+  alert('Este mod altera o Engine.ini do jogo.\n\nNa janela que vai abrir, cola isto na barra de endereço e carrega Enter:\n'+CFG_HINT+'\n\ne depois clica em "Selecionar pasta".');
+  var sel=await window.showDirectoryPicker({mode:'readwrite',id:'swmp-cfg'});
+  if(!await _hasEntry(sel,'GameUserSettings.ini','file')){
+    alert('Pasta errada: não encontrei GameUserSettings.ini.\nA pasta certa é:\n'+CFG_HINT+'\n(abre o jogo pelo menos uma vez se ela não existir)');
+    return null;
+  }
+  _cfgDir=sel;
+  await _idbSet('cfg_dir',sel);
   return sel;
+}
+
+function _updateFolderBtn(){
+  var b=document.getElementById('btn-set-folder');
+  if(b&&_modsDir) b.title='Pasta do jogo configurada — clica para alterar';
 }
 
 function _safeName(n){return n.replace(/[^A-Za-z0-9 _.\-]/g,'_').trim().replace(/\.+$/,'')||'mod';}
 
-async function _extractZip(data,dirHandle,modName){
+function _splitPath(p){
+  var segs=p.replace(/\\/g,'/').split('/').filter(function(s){return s&&s!=='.';});
+  if(segs.some(function(s){return s==='..'||s.indexOf(':')>=0;})) throw new Error('Caminho inválido no ZIP: '+p);
+  return segs;
+}
+
+async function _dirAt(root,path,create){
+  var cur=root, segs=_splitPath(path);
+  for(var i=0;i<segs.length;i++) cur=await cur.getDirectoryHandle(segs[i],{create:!!create});
+  return cur;
+}
+
+async function _writeFile(root,path,data){
+  var segs=_splitPath(path);
+  var dir=await _dirAt(root,segs.slice(0,-1).join('/'),true);
+  var fh=await dir.getFileHandle(segs[segs.length-1],{create:true});
+  var w=await fh.createWritable();
+  await w.write(data);
+  await w.close();
+}
+
+async function _readText(root,path){
+  try{
+    var segs=_splitPath(path);
+    var dir=await _dirAt(root,segs.slice(0,-1).join('/'),false);
+    var f=await (await dir.getFileHandle(segs[segs.length-1])).getFile();
+    return await f.text();
+  }catch(e){return null;}
+}
+
+async function _removePath(root,path){
+  try{
+    var segs=_splitPath(path);
+    var dir=await _dirAt(root,segs.slice(0,-1).join('/'),false);
+    await dir.removeEntry(segs[segs.length-1],{recursive:true});
+  }catch(e){}
+}
+
+// mods.txt do UE4SS: ativa/desativa uma entrada mantendo "Keybinds" no fim
+async function _modsTxt(root,name,enable){
+  var path=UE4SS_MODS+'/mods.txt';
+  var txt=(await _readText(root,path))||'Keybinds : 1\n';
+  var lines=txt.replace(/\r/g,'').split('\n').filter(function(l){
+    return l.split(':')[0].trim().toLowerCase()!==name.toLowerCase();
+  });
+  if(enable){
+    var idx=lines.findIndex(function(l){return /^;\s*Built-in keybinds/i.test(l)||/^Keybinds\s*:/i.test(l);});
+    if(idx<0) idx=lines.length;
+    lines.splice(idx,0,name+' : 1');
+  }
+  await _writeFile(root,path,lines.join('\r\n'));
+}
+
+async function _ue4ssInstalled(root){
+  try{ await (await _dirAt(root,WIN64_PATH+'/ue4ss',false)).getFileHandle('UE4SS.dll'); return true; }
+  catch(e){ return false; }
+}
+
+// Analisa o ZIP e instala. Devolve o manifesto (o que foi escrito) para desinstalar depois.
+async function _installZipData(data,root,opt,fallbackName){
   var zip=await JSZip.loadAsync(data);
-  var files=Object.keys(zip.files).filter(function(p){return !zip.files[p].dir;});
-  // Detetar prefixo comum
-  var prefix='';
-  if(files.length){
-    var cand=files[0].split('/')[0]+'/';
-    if(files.length>1&&files.every(function(f){return f.startsWith(cand);})) prefix=cand;
+  var entries=[];
+  zip.forEach(function(p,f){ if(!f.dir) entries.push({path:p.replace(/\\/g,'/'),file:f}); });
+  var lower=entries.map(function(e){return e.path.toLowerCase();});
+  var man={files:[],modsTxt:[],cfg:null};
+  async function put(path,e){ await _writeFile(root,path,await e.file.async('arraybuffer')); man.files.push(path); }
+
+  // 1. UE4SS (loader)
+  if(lower.indexOf('dwmapi.dll')>=0){
+    // remove a UE4SS genérica antiga (layout na raiz do Win64), que não arranca neste jogo
+    await _removePath(root,WIN64_PATH+'/UE4SS.dll');
+    await _removePath(root,WIN64_PATH+'/UE4SS-settings.ini');
+    var hasModsTxt=(await _readText(root,UE4SS_MODS+'/mods.txt'))!==null;
+    for(var i=0;i<entries.length;i++){
+      var p=entries[i].path;
+      if(/^readme/i.test(p)) continue;
+      if(hasModsTxt&&p.toLowerCase()==='ue4ss/mods/mods.txt') continue;
+      await put(WIN64_PATH+'/'+p,entries[i]);
+    }
+    man.kind='loader';
+    return man;
   }
-  var modDir=await dirHandle.getDirectoryHandle(_safeName(modName),{create:true});
-  for(var i=0;i<files.length;i++){
-    var path=files[i];
-    var rel=prefix?path.slice(prefix.length):path;
-    if(!rel) continue;
-    var segs=rel.split('/');
-    var cur=modDir;
-    for(var j=0;j<segs.length-1;j++) cur=await cur.getDirectoryHandle(segs[j],{create:true});
-    var fh=await cur.getFileHandle(segs[segs.length-1],{create:true});
-    var w=await fh.createWritable();
-    await w.write(await zip.files[path].async('arraybuffer'));
-    await w.close();
+  // 2. Ficheiros PAK
+  var paks=entries.filter(function(e){return /\.(pak|ucas|utoc)$/i.test(e.path);});
+  if(opt&&opt.sub) paks=paks.filter(function(e){return e.path.slice(0,e.path.lastIndexOf('/'))===opt.sub;});
+  if(paks.length){
+    var seen={};
+    for(var j=0;j<paks.length;j++){
+      var base=paks[j].path.split('/').pop();
+      if(seen[base]) continue; seen[base]=1;
+      await put(PAK_MODS+'/'+base,paks[j]);
+    }
+    man.kind='pak';
+    return man;
   }
+  // 3. Engine.ini
+  var ini=entries.find(function(e){return /(^|\/)engine\.ini$/i.test(e.path);});
+  if(ini){
+    var cfg=await _getCfgDir();
+    if(!cfg) throw new Error('Pasta de configuração não selecionada');
+    var old=await _readText(cfg,'Engine.ini');
+    if(old!==null&&(await _readText(cfg,'Engine.ini.swmp-bak'))===null) await _writeFile(cfg,'Engine.ini.swmp-bak',old);
+    await _writeFile(cfg,'Engine.ini',await ini.file.async('arraybuffer'));
+    man.cfg={backup:old!==null};
+    man.kind='ini';
+    return man;
+  }
+  // 4. Mod UE4SS (Lua/DLL): pasta que contém enabled.txt, Scripts/main.lua ou dlls/main.dll
+  var roots={};
+  lower.forEach(function(p){
+    var m=p.match(/^(.*?)\/?(enabled\.txt|scripts\/main\.lua|dlls\/main\.dll)$/);
+    if(m) roots[m[1]]=1;
+  });
+  var rootList=Object.keys(roots).filter(function(r){
+    return !Object.keys(roots).some(function(o){return o!==r&&r.indexOf(o+'/')===0&&o!=='';});
+  });
+  if(!rootList.length) throw new Error('Formato de mod não reconhecido');
+  if(!await _ue4ssInstalled(root)) throw new Error('NEED_UE4SS');
+  for(var k=0;k<rootList.length;k++){
+    var r=rootList[k];
+    var origName=r?entries[lower.findIndex(function(p){return p.indexOf(r+'/')===0;})].path.slice(0,r.length).split('/').pop():_safeName(fallbackName);
+    var modName=_safeName(origName);
+    var dest=UE4SS_MODS+'/'+modName;
+    var hasEnabled=false;
+    for(var q=0;q<entries.length;q++){
+      var lp=lower[q];
+      if(r&&lp.indexOf(r+'/')!==0) continue;
+      var rel=r?entries[q].path.slice(r.length+1):entries[q].path;
+      if(!rel) continue;
+      if(rel.toLowerCase()==='enabled.txt') hasEnabled=true;
+      await put(dest+'/'+rel,entries[q]);
+    }
+    if(!hasEnabled){ await _writeFile(root,dest+'/enabled.txt',''); man.files.push(dest+'/enabled.txt'); }
+    await _modsTxt(root,modName,true);
+    man.modsTxt.push(modName);
+    man.dirs=(man.dirs||[]).concat([dest]);
+  }
+  man.kind='lua';
+  return man;
+}
+
+async function _uninstallManifest(root,man){
+  if(!man) return;
+  if(man.dirs) for(var i=0;i<man.dirs.length;i++) await _removePath(root,man.dirs[i]);
+  for(var j=0;j<(man.files||[]).length;j++) await _removePath(root,man.files[j]);
+  for(var k=0;k<(man.modsTxt||[]).length;k++) await _modsTxt(root,man.modsTxt[k],false);
+  if(man.cfg){
+    var cfg=await _getCfgDir();
+    if(cfg){
+      await _removePath(cfg,'Engine.ini');
+      var bak=await _readText(cfg,'Engine.ini.swmp-bak');
+      if(bak!==null){ await _writeFile(cfg,'Engine.ini',bak); await _removePath(cfg,'Engine.ini.swmp-bak'); }
+    }
+  }
+}
+
+// Compatibilidade com o fluxo Nexus
+async function _extractZip(data,dirHandle,modName){
+  var man;
+  try{ man=await _installZipData(data,dirHandle,null,modName); }
+  catch(e){
+    if(e.message!=='NEED_UE4SS') throw e;
+    await _ensureUE4SS(dirHandle);
+    man=await _installZipData(data,dirHandle,null,modName);
+  }
+  await _idbSet('man:nexus:'+modName.toLowerCase(),man);
   return _safeName(modName);
 }
 
@@ -1152,6 +1355,10 @@ async function installMod(modId,name,btn){
     return;
   }
   if(_installing.has(modId)) return;
+  // Pasta do jogo pedida já no clique (o browser exige gesto do utilizador para o seletor)
+  var dir;
+  try{ dir=await _getModsDir(); }catch(e){ return; }
+  if(!dir) return;
   _installing.add(modId);
   btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
   try{
@@ -1200,10 +1407,7 @@ async function installMod(modId,name,btn){
     var resp=await fetch(cdn.url,{signal:AbortSignal.timeout(180000)});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     zipData=await resp.arrayBuffer();
-    // 3. Escrever na pasta de mods via File System Access API
-    btn.textContent='A selecionar pasta...';
-    var dir=await _getModsDir();
-    if(!dir) throw new Error('Pasta não selecionada');
+    // 3. Escrever na pasta do jogo via File System Access API
     btn.textContent='A instalar...';
     await _extractZip(zipData,dir,name);
     installedMods.add(name.toLowerCase());
@@ -1242,7 +1446,7 @@ async function _setModsFolder(){
     var dir=await _getModsDir(true); // forceAsk=true
     if(dir){
       var btn=document.getElementById('btn-set-folder');
-      if(btn){btn.textContent='📁 '+dir.name;setTimeout(function(){btn.textContent='📁 PASTA DE MODS';},3000);}
+      if(btn){btn.textContent='📁 '+dir.name;setTimeout(function(){btn.textContent='📁 PASTA DO JOGO';},3000);}
     }
   }catch(e){}
 }
@@ -1254,7 +1458,10 @@ async function uninstallMod(name,btn){
   try{
     var dir=await _getModsDir();
     if(!dir) throw new Error('Pasta não selecionada');
-    await dir.removeEntry(_safeName(name),{recursive:true});
+    var man=await _idbGet('man:nexus:'+name.toLowerCase());
+    if(man) await _uninstallManifest(dir,man);
+    else await _removePath(dir,UE4SS_MODS+'/'+_safeName(name));
+    await _idbSet('man:nexus:'+name.toLowerCase(),null);
     installedMods.delete(name.toLowerCase());
     _uninstalling.delete(name);
     renderGrid();
@@ -1443,32 +1650,44 @@ async function importAll(){
   renderGrid();
 }
 
-// ─── MegaGames: download direto ───────────────────────────────────────────────
+// ─── Catálogo de mods com instalação automática ──────────────────────────────
+// Lista e links diretos guardados em /mods-catalog.json (sem scraping em runtime).
+// Os ZIPs descarregados ficam guardados no browser (IndexedDB) para reinstalar sem nova transferência.
 var _megaMods=[];
-var _megaInstalled=new Set();
+var _megaInstalled={};   // id → índice da opção instalada
 var _megaInstalling=new Set();
 var _megaImportRunning=false;
 var _megaImportStop=false;
+var _megaStatus={};      // id → {msg, err}
+var TYPE_LABEL={pak:'PAK','lua':'SCRIPT UE4SS','lua-files':'SCRIPT UE4SS',ini:'CONFIG',loader:'BASE'};
 
 async function loadMegaMods(){
   try{
-    var d=await fetch('/api/megagames-mods',{signal:AbortSignal.timeout(30000)}).then(function(r){return r.json();});
+    var d=await fetch('/mods-catalog.json',{signal:AbortSignal.timeout(15000)}).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    });
     _megaMods=d.mods||[];
+    for(var i=0;i<_megaMods.length;i++){
+      var man=await _idbGet('man:'+_megaMods[i].id);
+      if(man) _megaInstalled[_megaMods[i].id]=man.opt||0;
+    }
     document.getElementById('mega-count').textContent=_megaMods.length+' mods';
     renderMegaGrid();
   }catch(e){
-    document.getElementById('mega-grid').innerHTML='<div style="color:var(--red);padding:16px;grid-column:1/-1">Erro ao carregar mods do MegaGames.</div>';
+    document.getElementById('mega-grid').innerHTML='<div style="color:var(--red);padding:16px;grid-column:1/-1">Erro ao carregar o catálogo de mods.</div>';
     document.getElementById('mega-count').textContent='erro';
   }
 }
+
+function _fmtSize(b){ if(!b) return ''; return b>1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB'; }
 
 function renderMegaGrid(){
   var grid=document.getElementById('mega-grid');
   if(!_megaMods.length){grid.innerHTML='<div style="color:var(--fg2);padding:16px;grid-column:1/-1">Nenhum mod disponível.</div>';return;}
   grid.innerHTML='';
   _megaMods.forEach(function(m){
-    var key=m.slug;
-    var inst=_megaInstalled.has(key);
+    var inst=Object.prototype.hasOwnProperty.call(_megaInstalled,m.id);
     var card=document.createElement('div');
     card.className='mod-card';
     card.innerHTML=
@@ -1477,98 +1696,178 @@ function renderMegaGrid(){
           '<div class="mod-name" style="font-weight:600;font-size:13px;line-height:1.4"></div>'+
           (inst?'<span class="installed-badge">Instalado</span>':'')+
         '</div>'+
-        '<div style="margin-top:6px;font-size:11px;color:var(--fg2)">'+m.zips.length+' ficheiro(s) disponível(eis)</div>'+
+        '<div class="mod-meta"><span class="mod-type"></span><span class="mod-size"></span></div>'+
+        '<div class="mod-desc"></div>'+
+        '<select class="mod-opt" style="display:none;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px;max-width:100%"></select>'+
+        '<div class="mod-status" style="font-size:11px;min-height:0"></div>'+
       '</div>'+
       '<div class="mod-footer">'+
-        '<button class="install-btn'+(inst?' installed':'')+'">'+
-          (inst?'↩ DESINSTALAR':'⬇ INSTALAR')+
-        '</button>'+
-        '<a class="nexus-link" href="'+m.page_url+'" target="_blank" rel="noopener">Ver em MegaGames →</a>'+
+        '<button class="install-btn'+(inst?' installed':'')+'"></button>'+
+        (m.page_url?'<a class="nexus-link" target="_blank" rel="noopener">Página →</a>':'')+
       '</div>';
-    card.querySelector('.mod-name').textContent=m.short_name||m.name;
-    var btn=card.querySelector('.install-btn');
-    if(inst){
-      (function(slug,b){b.addEventListener('click',function(){megaUninstall(slug,b);});})(key,btn);
-    }else{
-      if(_megaInstalling.has(key)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
-      (function(mod,b){b.addEventListener('click',function(){megaInstall(mod,b);});})(m,btn);
+    card.querySelector('.mod-name').textContent=m.name;
+    card.querySelector('.mod-desc').textContent=m.desc||'';
+    card.querySelector('.mod-type').textContent=TYPE_LABEL[m.type]||m.type;
+    var link=card.querySelector('.nexus-link');
+    if(link) link.href=m.page_url;
+    var sel=card.querySelector('.mod-opt');
+    var sizeEl=card.querySelector('.mod-size');
+    if(m.options.length>1){
+      sel.style.display='';
+      m.options.forEach(function(o,i){
+        var op=document.createElement('option');op.value=i;op.textContent=o.label;sel.appendChild(op);
+      });
+      if(inst) {sel.value=_megaInstalled[m.id];sel.disabled=true;}
     }
+    function upd(){ var o=m.options[sel.value|0]; sizeEl.textContent=_fmtSize(o&&o.size); }
+    sel.addEventListener('change',upd); upd();
+    var st=_megaStatus[m.id];
+    if(st){ var se=card.querySelector('.mod-status'); se.textContent=st.msg; se.style.color=st.err?'var(--red)':'var(--green)'; }
+    var btn=card.querySelector('.install-btn');
+    if(_megaInstalling.has(m.id)){btn.textContent='A instalar...';btn.disabled=true;}
+    else btn.textContent=inst?'↩ DESINSTALAR':'⬇ INSTALAR';
+    btn.addEventListener('click',function(){
+      if(inst) megaUninstall(m.id,btn); else megaInstall(m,btn,sel.value|0).catch(function(){});
+    });
     grid.appendChild(card);
   });
 }
 
-async function megaInstall(mod,btn){
-  if(_megaInstalling.has(mod.slug)) return;
-  _megaInstalling.add(mod.slug);
-  btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
-  try{
-    // Busca ZIP URL on-demand (evita timeout do Vercel com fetch de 14 páginas)
-    var zipMeta=await fetch('/api/megagames-zip?slug='+encodeURIComponent(mod.slug),{signal:AbortSignal.timeout(20000)}).then(function(r){return r.json();});
-    if(!zipMeta.zip_url) throw new Error(zipMeta.error||'ZIP não encontrado');
-    var zipUrl=zipMeta.zip_url;
-    btn.textContent='A baixar...';
-    if(!zipUrl) throw new Error('Sem URL de download');
-    var resp=await fetch(zipUrl,{signal:AbortSignal.timeout(300000)});
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    btn.textContent='A extrair...';
-    var data=await resp.arrayBuffer();
-    var dir=await _getModsDir();
-    if(!dir) throw new Error('Pasta não selecionada');
-    await _extractZip(data,dir,mod.short_name||mod.name);
-    _megaInstalled.add(mod.slug);
-    _megaInstalling.delete(mod.slug);
-    renderMegaGrid();
-  }catch(e){
-    btn.textContent='⬇ INSTALAR';btn.disabled=false;btn.style.opacity='';
-    _megaInstalling.delete(mod.slug);
-    if(e.name!=='AbortError') console.warn('megaInstall:',e.message);
-  }
+async function _fetchZip(url,onProgress){
+  var cached=await _idbGet('zip:'+url);
+  if(cached) return cached;
+  var resp=await fetch(url,{signal:AbortSignal.timeout(300000)});
+  if(!resp.ok) throw new Error('Download falhou (HTTP '+resp.status+')');
+  var data=await resp.arrayBuffer();
+  _idbSet('zip:'+url,data);
+  return data;
 }
 
-async function megaUninstall(slug,btn){
-  var mod=_megaMods.find(function(m){return m.slug===slug;});
-  if(!mod) return;
+async function _installCatalogMod(root,mod,optIdx,btn){
+  var opt=mod.options[optIdx]||mod.options[0];
+  var man;
+  if(mod.type==='lua-files'){
+    if(!await _ue4ssInstalled(root)) await _ensureUE4SS(root,btn);
+    if(btn) btn.textContent='A instalar...';
+    man={files:[],modsTxt:[],dirs:[],kind:'lua'};
+    var names={};
+    for(var dest in opt.files){
+      var r=await fetch(opt.files[dest],{cache:'no-cache'});
+      if(!r.ok) throw new Error('Ficheiro em falta: '+opt.files[dest]);
+      await _writeFile(root,UE4SS_MODS+'/'+dest,await r.arrayBuffer());
+      names[dest.split('/')[0]]=1;
+    }
+    for(var n in names){
+      await _writeFile(root,UE4SS_MODS+'/'+n+'/enabled.txt','');
+      await _modsTxt(root,n,true);
+      man.modsTxt.push(n); man.dirs.push(UE4SS_MODS+'/'+n);
+    }
+  }else{
+    if(btn) btn.textContent='A descarregar...';
+    var data=await _fetchZip(opt.url);
+    if(btn) btn.textContent='A instalar...';
+    try{ man=await _installZipData(data,root,opt,mod.id); }
+    catch(e){
+      if(e.message!=='NEED_UE4SS') throw e;
+      await _ensureUE4SS(root,btn);
+      if(btn) btn.textContent='A instalar...';
+      man=await _installZipData(data,root,opt,mod.id);
+    }
+  }
+  man.opt=optIdx;
+  await _idbSet('man:'+mod.id,man);
+  _megaInstalled[mod.id]=optIdx;
+  return man;
+}
+
+// Instala a UE4SS compatível com o jogo (necessária para mods de script)
+async function _ensureUE4SS(root,btn){
+  if(await _ue4ssInstalled(root)) return;
+  var u=_megaMods.find(function(m){return m.id==='ue4ss';});
+  if(!u){
+    var d=await fetch('/mods-catalog.json').then(function(r){return r.json();});
+    u=(d.mods||[]).find(function(m){return m.id==='ue4ss';});
+  }
+  if(!u) throw new Error('UE4SS não está no catálogo');
+  if(btn) btn.textContent='A instalar UE4SS...';
+  await _installCatalogMod(root,u,0,null);
+  _megaStatus['ue4ss']={msg:'✓ Instalada automaticamente'};
+}
+
+function _errMsg(e){
+  if(e.name==='NotAllowedError'||e.name==='SecurityError') return 'Permissão negada à pasta. Clica de novo e permite o acesso.';
+  if(e.message==='NEED_UE4SS') return 'Falta a UE4SS.';
+  if(e.name==='NoModificationAllowedError'||/locked|in use/i.test(e.message)) return 'Ficheiro em uso — fecha o jogo e tenta de novo.';
+  return e.message||String(e);
+}
+
+async function megaInstall(mod,btn,optIdx,rootArg){
+  if(_megaInstalling.has(mod.id)) return;
+  var root=rootArg;
+  try{ if(!root) root=await _getModsDir(); }catch(e){ if(e.name!=='AbortError'){_megaStatus[mod.id]={msg:_errMsg(e),err:1};renderMegaGrid();} return; }
+  if(!root) return;
+  _megaInstalling.add(mod.id);
+  delete _megaStatus[mod.id];
+  btn.disabled=true;btn.style.opacity='0.7';
+  try{
+    var man=await _installCatalogMod(root,mod,optIdx,btn);
+    _megaStatus[mod.id]={msg:'✓ Instalado ('+(man.files.length||man.modsTxt.length||1)+' ficheiro(s))'};
+  }catch(e){
+    if(e.name!=='AbortError') _megaStatus[mod.id]={msg:'✗ '+_errMsg(e),err:1};
+    _megaInstalling.delete(mod.id);
+    renderMegaGrid();
+    throw e;
+  }
+  _megaInstalling.delete(mod.id);
+  renderMegaGrid();
+}
+
+async function megaUninstall(id,btn){
+  var root;
+  try{ root=await _getModsDir(); }catch(e){ return; }
+  if(!root) return;
   btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';
   try{
-    var dir=await _getModsDir();
-    if(!dir) throw new Error('Pasta não selecionada');
-    var safe=_safeName(mod.short_name||mod.name);
-    await dir.removeEntry(safe,{recursive:true});
-    _megaInstalled.delete(slug);
-    renderMegaGrid();
+    await _uninstallManifest(root,await _idbGet('man:'+id));
+    await _idbSet('man:'+id,null);
+    delete _megaInstalled[id];
+    _megaStatus[id]={msg:'Removido'};
   }catch(e){
-    btn.textContent='↩ DESINSTALAR';btn.disabled=false;btn.style.opacity='';
+    _megaStatus[id]={msg:'✗ '+_errMsg(e),err:1};
   }
+  renderMegaGrid();
 }
 
-function megaImportAll(){
+async function megaImportAll(){
   if(_megaImportRunning){_megaImportStop=true;return;}
+  var root;
+  try{ root=await _getModsDir(); }catch(e){ return; }
+  if(!root) return;
   _megaImportRunning=true;
   _megaImportStop=false;
   var lbl=document.getElementById('mega-import-label');
   var btn=document.getElementById('btn-mega-import');
   btn.style.borderColor='var(--red)';btn.style.color='var(--red)';
-  var queue=_megaMods.filter(function(m){return !_megaInstalled.has(m.slug);});
-  var total=queue.length;
-  var done=0;
-  (async function(){
-    for(var i=0;i<queue.length;i++){
-      if(_megaImportStop) break;
-      var m=queue[i];
-      lbl.textContent='■ '+(done+1)+'/'+total+' '+m.short_name.slice(0,16)+'…';
-      // Criar botão virtual para cada mod
-      var vBtn=document.createElement('button');
-      vBtn.textContent='⬇ INSTALAR';vBtn.disabled=false;vBtn.style.opacity='';
-      try{await megaInstall(m,vBtn);done++;}catch(e){}
-      await new Promise(function(r){setTimeout(r,600);});
-    }
-    _megaImportRunning=false;_megaImportStop=false;
-    btn.style.borderColor='#22c55e';btn.style.color='#22c55e';
-    lbl.textContent='⬇ INSTALAR TODOS';
-    renderMegaGrid();
-  })();
+  // UE4SS primeiro; nos mods com variantes instala a primeira opção
+  // Engine.ini fica de fora: precisa de escolher outra pasta
+  var queue=_megaMods.filter(function(m){return m.type!=='ini'&&!Object.prototype.hasOwnProperty.call(_megaInstalled,m.id);});
+  queue.sort(function(a,b){return (b.id==='ue4ss')-(a.id==='ue4ss');});
+  var total=queue.length, done=0, failed=0;
+  for(var i=0;i<queue.length;i++){
+    if(_megaImportStop) break;
+    var m=queue[i];
+    if(Object.prototype.hasOwnProperty.call(_megaInstalled,m.id)){done++;continue;}
+    lbl.textContent='■ '+(i+1)+'/'+total+' '+m.name.slice(0,16)+'…';
+    var vBtn=document.createElement('button');
+    try{await megaInstall(m,vBtn,0,root);done++;}catch(e){failed++;}
+  }
+  _megaImportRunning=false;_megaImportStop=false;
+  btn.style.borderColor='#22c55e';btn.style.color='#22c55e';
+  lbl.textContent=failed?done+' OK, '+failed+' falharam':'✓ '+done+' instalados';
+  setTimeout(function(){lbl.textContent='⬇ INSTALAR TODOS';},6000);
+  renderMegaGrid();
 }
 
-// Carregar mods do MegaGames ao iniciar
+// Carregar catálogo ao iniciar
 loadMegaMods();
 </script>

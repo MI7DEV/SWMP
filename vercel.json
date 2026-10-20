@@ -1,21 +1,58 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.js": { "memory": 128, "maxDuration": 10 },
-    "api/megagames-mods.js": { "memory": 256, "maxDuration": 45 }
+    "api/**/*.js": {
+      "memory": 128,
+      "maxDuration": 15
+    }
   },
   "routes": [
-    { "src": "/api/nexus/browse",    "dest": "/api/nexus.js"           },
-    { "src": "/api/nexus/installed", "dest": "/api/nexus-installed.js" },
-    { "src": "/api/nexus",           "dest": "/api/nexus.js"           },
-    { "src": "/api/config",          "dest": "/api/config.js"          },
-    { "src": "/api/info",            "dest": "/api/info.js"            },
-    { "src": "/api/health",          "dest": "/api/health.js"          },
-    { "src": "/api/nexus-cdn",       "dest": "/api/nexus-cdn.js"       },
-    { "src": "/api/megagames-mods",  "dest": "/api/megagames-mods.js"  },
-    { "src": "/api/megagames-zip",   "dest": "/api/megagames-zip.js"   },
-    { "src": "/client",              "dest": "/client.html"            },
-    { "src": "/host",                "dest": "/host.html"              },
-    { "src": "/(.*)",                "dest": "/$1"                     }
+    {
+      "src": "/api/nexus/browse",
+      "dest": "/api/nexus.js"
+    },
+    {
+      "src": "/api/nexus/installed",
+      "dest": "/api/nexus-installed.js"
+    },
+    {
+      "src": "/api/nexus",
+      "dest": "/api/nexus.js"
+    },
+    {
+      "src": "/api/config",
+      "dest": "/api/config.js"
+    },
+    {
+      "src": "/api/info",
+      "dest": "/api/info.js"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.js"
+    },
+    {
+      "src": "/api/nexus-cdn",
+      "dest": "/api/nexus-cdn.js"
+    },
+    {
+      "src": "/client",
+      "dest": "/client.html"
+    },
+    {
+      "src": "/host",
+      "dest": "/host.html"
+    },
+    {
+      "src": "/mods-catalog.json",
+      "headers": {
+        "Cache-Control": "public, max-age=300"
+      },
+      "dest": "/mods-catalog.json"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
   ]
 }
