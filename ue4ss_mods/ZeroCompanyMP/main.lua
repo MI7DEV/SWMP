@@ -3,6 +3,80 @@
 -- Módulo do jogo: BitReactorGame
 
 local JSON_OK, json = pcall(require, "json")
+if not JSON_OK then
+    -- O UE4SS do jogo não traz biblioteca "json" (por isso os comandos do co-op eram ignorados): JSON mínimo em Lua
+    json = {}
+    local function skip(s, i) return s:find("[^%s]", i) or #s + 1 end
+    local ESC = { b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
+    local function decode_string(s, i)
+        local out, j = {}, i + 1
+        while true do
+            local c = s:sub(j, j)
+            if c == "" then error("texto sem fim") end
+            if c == '"' then return table.concat(out), j + 1 end
+            if c == "\\" then
+                local e = s:sub(j + 1, j + 1)
+                if e == "u" then out[#out + 1] = utf8.char(tonumber(s:sub(j + 2, j + 5), 16)); j = j + 6
+                else out[#out + 1] = ESC[e] or e; j = j + 2 end
+            else out[#out + 1] = c; j = j + 1 end
+        end
+    end
+    local decode_value
+    decode_value = function(s, i)
+        i = skip(s, i)
+        local c = s:sub(i, i)
+        if c == "{" then
+            local t = {}; i = skip(s, i + 1)
+            if s:sub(i, i) == "}" then return t, i + 1 end
+            while true do
+                local k; k, i = decode_string(s, skip(s, i))
+                i = skip(s, i) + 1
+                t[k], i = decode_value(s, i)
+                i = skip(s, i)
+                local d = s:sub(i, i); i = i + 1
+                if d == "}" then return t, i end
+            end
+        elseif c == "[" then
+            local t = {}; i = skip(s, i + 1)
+            if s:sub(i, i) == "]" then return t, i + 1 end
+            while true do
+                t[#t + 1], i = decode_value(s, i)
+                i = skip(s, i)
+                local d = s:sub(i, i); i = i + 1
+                if d == "]" then return t, i end
+            end
+        elseif c == '"' then return decode_string(s, i)
+        elseif s:sub(i, i + 3) == "true" then return true, i + 4
+        elseif s:sub(i, i + 4) == "false" then return false, i + 5
+        elseif s:sub(i, i + 3) == "null" then return nil, i + 4
+        end
+        local num = s:match("^-?%d+%.?%d*[eE]?[-+]?%d*", i)
+        if not num then error("JSON inválido na posição " .. i) end
+        return tonumber(num), i + #num
+    end
+    function json.decode(s) return (decode_value(s, 1)) end
+    local function enc(v)
+        local t = type(v)
+        if t == "table" then
+            local parts = {}
+            if #v > 0 or next(v) == nil then
+                for _, x in ipairs(v) do parts[#parts + 1] = enc(x) end
+                return "[" .. table.concat(parts, ",") .. "]"
+            end
+            for k, x in pairs(v) do parts[#parts + 1] = enc(tostring(k)) .. ":" .. enc(x) end
+            return "{" .. table.concat(parts, ",") .. "}"
+        elseif t == "string" then
+            return '"' .. v:gsub('[%c"\\]', function(ch) return string.format("\\u%04x", ch:byte()) end) .. '"'
+        elseif t == "number" then
+            if v ~= v or v == math.huge or v == -math.huge then return "0" end
+            return tostring(v)
+        elseif t == "boolean" then return tostring(v)
+        end
+        return "null"
+    end
+    function json.encode(v) return enc(v) end
+    JSON_OK = true
+end
 -- caminho completo do script ("@C:\...\main.lua"); short_src é truncado ("...inaries\Win64") e não serve
 local MOD_PATH    = (debug.getinfo(1, "S").source or ""):gsub("^@", ""):match("^(.+)[/\\]") or "."
 local CMD_FILE    = MOD_PATH .. "\\mp_command.json"
