@@ -6,12 +6,49 @@
     }
   },
   "rewrites": [
-    { "source": "/api/nexus/installed", "destination": "/api/nexus-installed" },
-    { "source": "/client", "destination": "/client.html" },
-    { "source": "/host", "destination": "/host.html" }
+    {
+      "source": "/api/nexus/installed",
+      "destination": "/api/nexus-installed"
+    },
+    {
+      "source": "/client",
+      "destination": "/client.html"
+    },
+    {
+      "source": "/host",
+      "destination": "/host.html"
+    },
+    {
+      "source": "/coop",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mods",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/musica",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
-    { "source": "/mods-catalog.json", "headers": [{ "key": "Cache-Control", "value": "private, max-age=300" }] },
-    { "source": "/mods/(.*\\.zip)", "headers": [{ "key": "Cache-Control", "value": "private, max-age=86400" }] }
+    {
+      "source": "/mods-catalog.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=300"
+        }
+      ]
+    },
+    {
+      "source": "/mods/(.*\\.zip)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=86400"
+        }
+      ]
+    }
   ]
 }

@@ -42,6 +42,11 @@ header{
   display:flex;align-items:center;gap:14px;flex-wrap:wrap;
 }
 .logo-icon{font-size:28px;line-height:1}
+.tabs{position:relative;z-index:10;display:flex;gap:6px;padding:14px 16px 0;max-width:1200px;margin:0 auto;flex-wrap:wrap}
+.tabs a{padding:9px 16px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;color:var(--fg2);text-decoration:none;
+  font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.1em;background:rgba(255,255,255,.02)}
+.tabs a.on{color:var(--gold);background:rgba(245,197,24,.08);border-color:rgba(245,197,24,.4)}
+.page{display:none}.page.on{display:block}
 .logo-text{
   font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(15px,3vw,22px);
   letter-spacing:.12em;color:var(--gold);text-shadow:0 0 20px rgba(245,197,24,.35);
@@ -265,7 +270,6 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     <div class="logo-sub">Star Wars Zero Company</div>
   </div>
   <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
-    <a href="#music-section" title="Trocar a música do jogo" style="padding:5px 12px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);border-radius:6px;color:var(--gold);font-size:11px;letter-spacing:.05em;white-space:nowrap;text-decoration:none">🎵 TRILHA SONORA</a>
     <button id="btn-set-folder" onclick="_setModsFolder()" title="Selecionar pasta do jogo" style="padding:5px 12px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);border-radius:6px;color:var(--gold);font-size:11px;cursor:pointer;letter-spacing:.05em;white-space:nowrap">📁 PASTA DO JOGO</button>
     <div class="conn-dot">
       <div class="dot" id="srv-dot"></div>
@@ -276,7 +280,14 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 </header>
 <script>fetch('/api/login').then(function(r){return r.json();}).then(function(d){if(d.user){var w=document.getElementById('who');w.textContent='👤 '+d.user+' · sair';w.style.display='';}}).catch(function(){});</script>
 
+<nav class="tabs">
+  <a href="/coop" data-go="coop">⚔ CO-OP &amp; BATALHA</a>
+  <a href="/mods" data-go="mods">🧩 MODS</a>
+  <a href="/musica" data-go="musica">🎵 MÚSICAS</a>
+</nav>
+
 <main>
+<section class="page" data-page="coop">
   <div class="action-row">
     <button class="action-btn primary" id="btn-host">
       <div class="btn-icon">⚔</div>
@@ -356,8 +367,33 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
   </div>
 
 
+
+  <!-- ── Batalha 1x1 (PvP) ── -->
+  <div id="pvp-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ⚔ Batalha 1x1 <span id="pvp-state" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">desligada</span>
+    </h2>
+    <p style="font-size:12px;color:var(--fg2);line-height:1.7;margin-bottom:12px">
+      PvP no PC do anfitrião: o <b style="color:var(--fg)">Jogador 1</b> controla o esquadrão e o <b style="color:var(--fg)">Jogador 2</b> controla o lado inimigo — a IA inimiga deixa de agir.
+      O amigo joga pela internet com o <b style="color:var(--fg)">Steam Remote Play Together</b> (não precisa de ter o jogo).
+    </p>
+    <ol style="font-size:12px;color:var(--fg2);line-height:1.9;margin:0 0 14px 18px">
+      <li><b style="color:var(--fg)">Anfitrião:</b> entra numa missão e escolhe o esquadrão, como sempre.</li>
+      <li>No Steam: <b style="color:var(--fg)">Shift+Tab → Amigos → (amigo) → Remote Play Together</b>. O amigo aceita e passa a ver e usar o rato no teu jogo.</li>
+      <li>No início do combate carrega em <b style="color:var(--fg)">LIGAR BATALHA</b> (ou <b style="color:var(--fg)">F8</b> dentro do jogo).</li>
+      <li>Cada jogador move as suas unidades à vez; o Jogador 2 seleciona as unidades inimigas e age com elas.</li>
+    </ol>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="install-btn" id="pvp-on" style="flex:0 0 auto;padding:9px 18px">⚔ LIGAR BATALHA</button>
+      <button class="install-btn" id="pvp-off" style="flex:0 0 auto;padding:9px 18px">■ DESLIGAR</button>
+      <span id="pvp-info" style="font-size:12px;color:var(--fg2)"></span>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-page="mods">
   <!-- ── Mods: instalação automática a partir do servidor SWMP ── -->
-  <div id="mega-section" style="margin-top:32px">
+  <div id="mega-section" style="margin-top:8px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       Instalação Automática <span style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px" id="mega-count">A carregar...</span>
       <span style="font-size:10px;color:var(--fg2);font-family:'Exo 2',sans-serif;letter-spacing:.04em">— 1 clique, sem conta, sem servidor. 1ª vez: escolhe a pasta do jogo (Chrome/Edge)</span>
@@ -369,8 +405,11 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <div style="color:var(--fg2);padding:16px;grid-column:1/-1"><div class="spinner" style="display:inline-block;margin-right:8px"></div>A carregar mods...</div>
     </div>
   </div>
+</section>
+
+<section class="page" data-page="musica">
   <!-- ── Trilha sonora: substitui a música do jogo pelas músicas do utilizador ── -->
-  <div id="music-section" style="margin-top:40px">
+  <div id="music-section" style="margin-top:8px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       🎵 Trilha Sonora
       <span id="mus-scene" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">desligada</span>
@@ -414,6 +453,7 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     </div>
     <div id="mus-hint" style="font-size:11px;color:var(--fg2);margin-top:8px;line-height:1.5"></div>
   </div>
+</section>
 </main>
 
 <script>
@@ -1966,6 +2006,56 @@ document.getElementById('mus-seq').addEventListener('change',function(){_mus.seq
 document.getElementById('mus-mute').addEventListener('change',function(){_idbSet('mus:mute',this.checked);_musCtrl(true);});
 setInterval(_musPoll,3000);
 _musLoad();
+
+
+// ── Batalha 1x1: o mod ZeroCompanyMP lê mp_pvp_cmd.json e escreve o estado em mp_pvp.json ──
+var PVP_CMD_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_pvp_cmd.json';
+var PVP_STATE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_pvp.json';
+async function _pvpCmd(cmd){
+  var info=document.getElementById('pvp-info');
+  try{
+    var root=await _getModsDir();
+    if(!root) return;
+    if(!(await _hasEntry(await _dirAt(root,UE4SS_MODS,true),'ZeroCompanyMP','dir'))){
+      info.textContent='A instalar a integração com o jogo (ZeroCompanyMP)…';
+      var mp=_megaMods.find(function(m){return m.id==='zerocompanymp';});
+      if(mp) await megaInstall(mp,document.createElement('button'),0,root);
+      info.textContent='Integração instalada — reinicia o jogo e carrega de novo.';
+      return;
+    }
+    await _writeFile(root,PVP_CMD_FILE,JSON.stringify({cmd:cmd,ts:Math.floor(Date.now()/1000)}));
+    info.textContent=cmd==='on'?'Pedido enviado ao jogo…':'A desligar…';
+    setTimeout(_pvpPoll,2500);
+  }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
+}
+async function _pvpPoll(){
+  if(!_modsDir||document.querySelector('.page.on')?.dataset.page!=='coop') return;
+  try{
+    if(await _modsDir.queryPermission({mode:'readwrite'})!=='granted') return;
+    var txt=await _readText(_modsDir,PVP_STATE_FILE); if(!txt) return;
+    var d=JSON.parse(txt), fresh=Date.now()/1000-(d.ts||0)<15;
+    var st=document.getElementById('pvp-state');
+    st.textContent=d.active&&fresh?'LIGADA':'desligada';
+    st.style.color=d.active&&fresh?'#4ade80':'';
+    if(d.active&&fresh) document.getElementById('pvp-info').textContent='Ronda '+(d.round||'—')+' · vez de: '+(d.current||'—')+' · '+(d.units||0)+' unidades em campo';
+  }catch(e){}
+}
+document.getElementById('pvp-on').addEventListener('click',function(){_pvpCmd('on');});
+document.getElementById('pvp-off').addEventListener('click',function(){_pvpCmd('off');});
+setInterval(_pvpPoll,3000);
+
+// Páginas: /coop, /mods, /musica (sem recarregar — a trilha sonora continua a tocar)
+var PAGE_ALIAS={'':'coop','index.html':'coop','coop':'coop','mods':'mods','musica':'musica'};
+function _showPage(name,push){
+  name=PAGE_ALIAS[name]||'coop';
+  document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('on',p.dataset.page===name);});
+  document.querySelectorAll('.tabs a').forEach(function(a){a.classList.toggle('on',a.dataset.go===name);});
+  if(push&&location.pathname!=='/'+name) history.pushState({},'','/'+name+location.search);
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.tabs a').forEach(function(a){a.addEventListener('click',function(ev){ev.preventDefault();_showPage(a.dataset.go,true);});});
+addEventListener('popstate',function(){_showPage(location.pathname.replace(/^\//,''));});
+_showPage(location.hash==='#music-section'?'musica':location.pathname.replace(/^\//,''));
 
 // Carregar catálogo ao iniciar
 loadMegaMods();

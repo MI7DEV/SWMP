@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.6
+-- ZeroCompanyMP/main.lua — v0.7
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -331,7 +331,7 @@ ExecuteWithDelay(3000, function()
 end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.6 carregado")
+print(" ZeroCompanyMP v0.7 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -488,8 +488,156 @@ local function update_scene()
 end
 
 local scene_tick = 0
+
+-- ─── Batalha 1x1 (PvP hot-seat no PC do anfitrião; o amigo entra por Steam Remote Play Together) ─────
+-- Jogador 1 controla o esquadrão; jogador 2 controla o lado inimigo.
+-- Usa ferramentas do próprio jogo: BrunoCheatManager:SelectAnyUnit (controlar qualquer unidade),
+-- br.AI.Planner.SimulatePlanNoCommit (a IA inimiga planeia mas não age) e TeamGameFlag.bAlwaysWantsControl.
+-- Controlo: tecla F8 no jogo, ou o portal escreve mp_pvp_cmd.json {"cmd":"on|off","ts":N}.
+local PVP_CMD    = MOD_PATH .. "\\mp_pvp_cmd.json"
+local PVP_STATE  = MOD_PATH .. "\\mp_pvp.json"
+local pvp_on     = false
+local pvp_cmd_ts = 0
+local pvp_flags  = {}   -- CDOs de TeamGameFlag alterados (para repor)
+
+local function pvp_pc()
+    local pcs = FindAllOf("PlayerController")
+    if pcs then for _, p in ipairs(pcs) do if valid(p) then return p end end end
+    return nil
+end
+
+local function pvp_console(cmd)
+    local pc = pvp_pc()
+    local ok, err = pcall(function()
+        local ksl = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+        ksl:ExecuteConsoleCommand(pc, cmd, pc)
+    end)
+    print(("[ZeroCompanyMP] PvP consola '%s': %s"):format(cmd, ok and "ok" or tostring(err)))
+end
+
+-- Precisa do CheatManager do próprio jogo (BrunoCheatManager); o CheatManagerEnablerMod cria um genérico
+local function pvp_cheat()
+    local pc = pvp_pc()
+    if not pc then return nil end
+    local ok, cm = pcall(function() return pc.CheatManager end)
+    local is_bruno = ok and valid(cm) and cm:GetClass():GetFName():ToString() == "BrunoCheatManager"
+    if is_bruno then return cm end
+    local okc, err = pcall(function()
+        local cls = StaticFindObject("/Script/Bruno.BrunoCheatManager")
+        local nc = StaticConstructObject(cls, pc)
+        pc.CheatManager = nc
+        pcall(function() nc:ReceiveInitCheatManager() end)
+        cm = nc
+    end)
+    print("[ZeroCompanyMP] PvP: BrunoCheatManager " .. (okc and "criado" or ("falhou: " .. tostring(err))))
+    if okc and valid(cm) then return cm end
+    return nil
+end
+
+local function pvp_subsys()
+    local l = FindAllOf("TurnGroupSubsystem")
+    if l then for _, x in ipairs(l) do if valid(x) then return x end end end
+    return nil
+end
+
+-- Lista as equipas do combate (grupos de turno) e quem está a jogar agora
+local function pvp_report()
+    local out = { active = pvp_on, ts = os.time(), teams = {}, current = "", round = 0 }
+    local ts = get_turn_state()
+    if ts then out.current = ts.team_name; out.round = ts.round end
+    local sub = pvp_subsys()
+    if sub then
+        pcall(function()
+            sub.OrderedTurnGroups:ForEach(function(i, g)
+                local grp = g:get()
+                local name = grp:GetFName():ToString()
+                local flag = ""
+                pcall(function() flag = grp.TeamGameFlag:GetFName():ToString() end)
+                out.teams[#out.teams + 1] = { group = name, flag = flag }
+            end)
+        end)
+    end
+    local chars = FindAllOf("BitReactorGameCharacter") or {}
+    local n = 0
+    for _, c in ipairs(chars) do if valid(c) then n = n + 1 end end
+    out.units = n
+    local parts = {}
+    for _, t in ipairs(out.teams) do parts[#parts + 1] = ('{"group":"%s","flag":"%s"}'):format(t.group, t.flag) end
+    write_file(PVP_STATE, ('{"active":%s,"round":%d,"current":"%s","units":%d,"teams":[%s],"ts":%d}'):format(
+        tostring(pvp_on), out.round or 0, out.current or "", n, table.concat(parts, ","), out.ts))
+    return out
+end
+
+-- Equipas que não são do jogador: marca o CDO da flag como "quer controlo humano"
+local function pvp_flag_control(want)
+    local sub = pvp_subsys()
+    if not sub then return end
+    pcall(function()
+        sub.OrderedTurnGroups:ForEach(function(i, g)
+            local grp = g:get()
+            local cls
+            pcall(function() cls = grp.TeamGameFlag end)
+            if cls and valid(cls) then
+                local cdo
+                pcall(function() cdo = cls:GetCDO() end)
+                if cdo and valid(cdo) then
+                    local name = cls:GetFName():ToString()
+                    if want then
+                        if pvp_flags[name] == nil then pvp_flags[name] = cdo.bAlwaysWantsControl end
+                        cdo.bAlwaysWantsControl = true
+                    elseif pvp_flags[name] ~= nil then
+                        cdo.bAlwaysWantsControl = pvp_flags[name]
+                    end
+                    print(("[ZeroCompanyMP] PvP equipa %s: bAlwaysWantsControl=%s"):format(name, tostring(cdo.bAlwaysWantsControl)))
+                end
+            end
+        end)
+    end)
+    if not want then pvp_flags = {} end
+end
+
+local function pvp_set(on)
+    pvp_on = on
+    local cm = pvp_cheat()
+    if cm then
+        local ok, err = pcall(function() cm:SelectAnyUnit(on) end)
+        if not ok then ok, err = pcall(function() cm.bSelectAnyUnit = on end) end
+        local now = "?"
+        pcall(function() now = tostring(cm.bSelectAnyUnit) end)
+        print("[ZeroCompanyMP] PvP SelectAnyUnit(" .. tostring(on) .. "): " .. (ok and "ok" or tostring(err)) .. " bSelectAnyUnit=" .. now)
+    else
+        print("[ZeroCompanyMP] PvP: CheatManager indisponível (o mod CheatManagerEnablerMod tem de estar ativo)")
+    end
+    pvp_console("br.AI.Planner.SimulatePlanNoCommit " .. (on and "1" or "0"))
+    pvp_flag_control(on)
+    print("[ZeroCompanyMP] Batalha 1x1 " .. (on and "LIGADA" or "DESLIGADA"))
+    pcall(pvp_report)
+end
+
+local function pvp_poll()
+    local raw = read_file(PVP_CMD)
+    if raw then
+        local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+        if ts > pvp_cmd_ts then
+            pvp_cmd_ts = ts
+            local cmd = raw:match('"cmd"%s*:%s*"(%a+)"')
+            if cmd == "on" then pvp_set(true) elseif cmd == "off" then pvp_set(false) elseif cmd == "report" then pcall(pvp_report) end
+        end
+    end
+    if pvp_on then pcall(pvp_report) end
+end
+
+pcall(function()
+    RegisterKeyBind(Key.F8, function() ExecuteInGameThread(function() pvp_set(not pvp_on) end) end)
+    RegisterKeyBind(Key.F7, function() ExecuteInGameThread(function() pcall(pvp_report); print("[ZeroCompanyMP] PvP relatório escrito") end) end)
+    print("[ZeroCompanyMP] Batalha 1x1: F8 liga/desliga, F7 relatório")
+end)
+-- ignora comandos antigos que já estavam no ficheiro ao arrancar
+do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
+
 local function loop()
     poll()
+    pcall(pvp_poll)
     scene_tick = scene_tick + 1
     if scene_tick % 2 == 0 then pcall(update_scene); pcall(apply_music_mute) end
     ExecuteWithDelay(1000, loop)
