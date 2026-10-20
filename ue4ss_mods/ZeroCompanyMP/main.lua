@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.9
+-- ZeroCompanyMP/main.lua — v0.10
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -133,6 +133,15 @@ local function valid(obj)
     if obj == nil then return false end
     local ok, result = pcall(function() return obj:IsValid() end)
     return ok and result == true
+end
+
+-- ExecuteWithDelay corre numa thread da UE4SS que não é a do jogo; mexer em objetos do jogo daí crasha
+-- (crash dump de 20/10: acesso nulo na UE4SS ao entrar em combate). Tudo o que toca no jogo passa por aqui.
+local function in_game_thread(fn)
+    ExecuteInGameThread(function()
+        local ok, err = pcall(fn)
+        if not ok then print("[ZeroCompanyMP] Erro: " .. tostring(err)) end
+    end)
 end
 
 -- ─── Ficheiros pendentes do portal (o Chrome não pode escrever/apagar .dll) ───
@@ -347,10 +356,10 @@ local function register_combat_hooks()
             if not valid(gs) then return end
             combat_active = true
             print("[ZeroCompanyMP] TacticalGameState: combate ativo.")
-            ExecuteWithDelay(2000, function()
+            ExecuteWithDelay(2000, function() in_game_thread(function()
                 run_explorer()
                 broadcast_turn(get_turn_state(), is_player_turn())
-            end)
+            end) end)
         end)
     end)
     if ok then print("[ZeroCompanyMP] Hook TacticalGameState: OK")
@@ -432,7 +441,7 @@ end
 -- ─── Init ─────────────────────────────────────────────────────────────────────
 register_combat_hooks()
 
-ExecuteWithDelay(3000, function()
+ExecuteWithDelay(3000, function() in_game_thread(function()
     print("[ZeroCompanyMP] Verificando estado inicial...")
     local ts_state = get_turn_state()
     if ts_state then
@@ -441,10 +450,10 @@ ExecuteWithDelay(3000, function()
             ts_state.round, ts_state.team_name))
         run_explorer()
     end
-end)
+end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.9 carregado")
+print(" ZeroCompanyMP v0.10 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -794,11 +803,18 @@ end)
 -- ignora comandos antigos que já estavam no ficheiro ao arrancar
 do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
 
-local function loop()
-    poll()
+local tick_queued = false
+local function tick()
+    tick_queued = false
+    pcall(poll)
     pcall(pvp_poll)
     scene_tick = scene_tick + 1
     if scene_tick % 2 == 0 then pcall(update_scene); pcall(apply_music_mute) end
+end
+-- o temporizador corre fora da thread do jogo: só agenda; o trabalho com objetos do jogo corre na thread do jogo
+-- (sem fila acumulada enquanto o jogo carrega um mapa)
+local function loop()
+    if not tick_queued then tick_queued = true; in_game_thread(tick) end
     ExecuteWithDelay(1000, loop)
 end
 loop()
