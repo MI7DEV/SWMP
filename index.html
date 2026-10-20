@@ -364,6 +364,14 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <button class="filter-btn active" data-sort="downloads">⬇ Mais baixados</button>
       <button class="filter-btn" data-sort="endorsements">⬆ Mais votados</button>
       <button class="filter-btn" data-sort="name">A–Z</button>
+      <button id="btn-import-all" onclick="toggleImportAll()" style="
+        margin-left:auto;padding:6px 16px;
+        background:rgba(245,197,24,.12);border:1.5px solid var(--gold2);border-radius:20px;
+        color:var(--gold);font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;
+        letter-spacing:.08em;cursor:pointer;white-space:nowrap;transition:background .2s;
+        display:flex;align-items:center;gap:8px">
+        <span id="import-icon">⬇</span><span id="import-label">IMPORTAR TODOS</span>
+      </button>
       <select id="limit-select" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;color:var(--fg2);font-size:12px;cursor:pointer">
         <option value="0">Todos</option>
         <option value="5">Top 5</option>
@@ -1137,11 +1145,40 @@ async function installMod(modId,name,btn){
     var cdn=await fetch('/api/nexus-cdn?mod_id='+modId,{signal:AbortSignal.timeout(10000)}).then(function(r){return r.json();});
     var zipData;
     if(cdn.need_premium){
-      // Conta gratuita: abrir Nexus + pedir ao utilizador que selecione o zip descarregado
-      window.open(cdn.fallback_url,'_blank');
-      btn.textContent='Selecionar ZIP';btn.disabled=false;btn.style.opacity='';
-      btn.dataset.pick='1';
-      _installing.delete(modId);
+      // Conta gratuita: servidor local usa cookies do browser para download automático
+      btn.textContent='A baixar...';
+      var _localPort=8766;
+      var _autoOk=false;
+      try{
+        var autoResp=await fetch('http://127.0.0.1:'+_localPort+'/api/nexus-auto-download',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+          body:JSON.stringify({file_id:cdn.file_id,name:name}),
+          signal:AbortSignal.timeout(300000)
+        });
+        var autoData=await autoResp.json();
+        if(autoData.ok){
+          _autoOk=true;
+          _installing.delete(modId);
+          installedMods.add(name.toLowerCase());
+          renderGrid();
+          return;
+        }
+        if(autoData.error==='not_logged_in'){
+          alert('Faz login no Nexus Mods no Chrome/Edge e tenta novamente.\n\n'+autoData.message);
+          btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+          _installing.delete(modId);
+          return;
+        }
+      }catch(autoErr){
+        // Servidor não está a correr — fallback para picker manual
+      }
+      if(!_autoOk){
+        window.open(cdn.fallback_url,'_blank');
+        btn.textContent='Selecionar ZIP';btn.disabled=false;btn.style.opacity='';
+        btn.dataset.pick='1';
+        _installing.delete(modId);
+      }
       return;
     }
     // 2. Descarregar ZIP do CDN
@@ -1299,5 +1336,96 @@ function renderGrid(){
     }
     grid.appendChild(card);
   });
+}
+
+// ─── Importar Todos ───────────────────────────────────────────────────────────
+var _importRunning=false;
+var _importStop=false;
+
+function toggleImportAll(){
+  if(_importRunning){ _importStop=true; return; }
+  importAll();
+}
+
+async function importAll(){
+  // Obter mods não instalados da grelha atual (respeitando filtros e limite)
+  var mods=allMods.filter(function(m){return m.name&&m.mod_id;});
+  if(currentFilter==='installed') mods=mods.filter(function(m){return installedMods.has(m.name.toLowerCase());});
+  if(currentFilter==='not_installed') mods=mods.filter(function(m){return !installedMods.has(m.name.toLowerCase());});
+  mods.sort(function(a,b){
+    if(currentSort==='endorsements') return (b.endorsement_count||0)-(a.endorsement_count||0);
+    if(currentSort==='name') return (a.name||'').localeCompare(b.name||'');
+    return (b.mod_downloads||0)-(a.mod_downloads||0);
+  });
+  var lim=parseInt(document.getElementById('limit-select').value)||0;
+  if(lim>0) mods=mods.slice(0,lim);
+
+  // Só os não instalados
+  var queue=mods.filter(function(m){return !installedMods.has(m.name.toLowerCase());});
+  if(!queue.length){
+    var lbl=document.getElementById('import-label');
+    lbl.textContent='Tudo instalado!';
+    setTimeout(function(){lbl.textContent='IMPORTAR TODOS';},3000);
+    return;
+  }
+
+  _importRunning=true;
+  _importStop=false;
+  var btn=document.getElementById('btn-import-all');
+  var icon=document.getElementById('import-icon');
+  var lbl=document.getElementById('import-label');
+  btn.style.borderColor='var(--red)';btn.style.color='var(--red)';
+  icon.textContent='■';
+
+  var total=queue.length;
+  var done=0;
+  var failed=[];
+
+  for(var i=0;i<queue.length;i++){
+    if(_importStop) break;
+    var m=queue[i];
+    lbl.textContent=(done+1)+'/'+total+' — '+m.name.slice(0,18)+(m.name.length>18?'…':'');
+
+    // Encontrar o botão do card correspondente
+    var cards=document.querySelectorAll('.mod-card');
+    var cardBtn=null;
+    cards.forEach(function(c){
+      var nm=c.querySelector('.mod-name');
+      if(nm&&nm.textContent===m.name) cardBtn=c.querySelector('.install-btn');
+    });
+
+    // Criar botão virtual se o card não estiver visível
+    var virtualBtn=cardBtn||document.createElement('button');
+    if(!cardBtn){
+      virtualBtn.textContent='INSTALAR';
+      virtualBtn.dataset={};
+    }
+
+    try{
+      await installMod(m.mod_id,m.name,virtualBtn);
+      done++;
+    }catch(e){
+      failed.push(m.name);
+    }
+    // Pequena pausa entre mods
+    await new Promise(function(r){setTimeout(r,800);});
+  }
+
+  _importRunning=false;
+  btn.style.borderColor='var(--gold2)';btn.style.color='var(--gold)';
+  icon.textContent='⬇';
+
+  var stopped=_importStop;
+  _importStop=false;
+
+  if(stopped){
+    lbl.textContent='Parado ('+done+'/'+total+')';
+  }else if(failed.length){
+    lbl.textContent=done+' OK, '+failed.length+' falharam';
+  }else{
+    lbl.textContent=done+' instalados!';
+  }
+  setTimeout(function(){lbl.textContent='IMPORTAR TODOS';},5000);
+  renderGrid();
 }
 </script>

@@ -7,6 +7,7 @@ AMIGO → http://<IP_DO_HOST>:8766
 
 import asyncio, json, socket, subprocess, time, threading, shutil, io, sys
 import urllib.request, urllib.error, urllib.parse, zipfile, base64, os, re
+import ctypes, ctypes.wintypes, sqlite3, tempfile, glob as _glob_module
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import websockets
@@ -1058,6 +1059,37 @@ class _HTTP(BaseHTTPRequestHandler):
                 return self._reply(200, "application/json", b'{"status":"started"}', acao)
             return self._reply(503, "application/json", b'{"error":"loop not ready"}', acao)
 
+        if path == "/api/nexus-auto-download":
+            if not from_local:
+                return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
+            if not self._is_trusted_origin(self.headers.get("Origin", "")):
+                return self._reply(403, "application/json", b'{"error":"bad origin"}', acao)
+            file_id_s = str(params.get("file_id", "")).strip()
+            raw_name  = params.get("name", "Mod")[:100]
+            mod_name  = re.sub(r'[^A-Za-z0-9 _.\-]', '_', raw_name).strip('.')
+            if not file_id_s.isdigit() or not mod_name:
+                return self._reply(400, "application/json", b'{"error":"bad params"}', acao)
+            try:
+                cdn_url = _nexus_slow_download_url(int(file_id_s))
+                req = urllib.request.Request(cdn_url, headers=_NX_HDRS)
+                data = urllib.request.urlopen(req, timeout=300).read()
+                installed = _install_from_bytes(data, mod_name)
+                body = json.dumps({"ok": True, "installed": installed}).encode()
+                if _loop:
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast({"type": "NEXUS_INSTALLED",
+                                   "mod_name": installed, "orig_name": mod_name}), _loop)
+                return self._reply(200, "application/json", body, acao)
+            except RuntimeError as e:
+                err = str(e)
+                code = "not_logged_in" if ("login" in err.lower() or "cookie" in err.lower()
+                                            or "sess" in err.lower()) else "download_failed"
+                body = json.dumps({"error": code, "message": err}).encode()
+                return self._reply(422, "application/json", body, acao)
+            except Exception as e:
+                body = json.dumps({"error": "download_failed", "message": str(e)}).encode()
+                return self._reply(500, "application/json", body, acao)
+
         if path == "/api/install-url":
             if not from_local:
                 return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
@@ -1175,6 +1207,161 @@ _NEXUS_CDN_HOSTS = frozenset({
     "supporter-files.nexus-cdn.com", "premium-files.nexus-cdn.com",
     "staticdelivery.nexusmods.com",
 })
+
+# ─── Cookie extraction do browser (download automático para contas gratuitas) ──
+
+def _dpapi_decrypt(data: bytes) -> bytes:
+    """Desencripta dados protegidos por DPAPI do Windows."""
+    class _BLOB(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.wintypes.DWORD),
+                    ("pbData", ctypes.POINTER(ctypes.c_char))]
+    buf = ctypes.create_string_buffer(data, len(data))
+    inp = _BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    out = _BLOB()
+    ok = ctypes.windll.Crypt32.CryptUnprotectData(
+        ctypes.byref(inp), None, None, None, None, 0, ctypes.byref(out))
+    if not ok:
+        raise RuntimeError("DPAPI decrypt falhou")
+    result = ctypes.string_at(out.pbData, out.cbData)
+    ctypes.windll.Kernel32.LocalFree(out.pbData)
+    return result
+
+def _chrome_aes_decrypt(enc_val: bytes, key: bytes) -> str:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    if enc_val[:3] in (b'v10', b'v11'):
+        nonce, ct = enc_val[3:15], enc_val[15:]
+        return AESGCM(key).decrypt(nonce, ct, None).decode('utf-8')
+    return _dpapi_decrypt(bytes(enc_val)).decode('utf-8')
+
+def _get_nexus_cookies() -> dict:
+    """Extrai cookies do Nexus Mods de Chrome/Edge/Brave/Firefox no Windows."""
+    results = {}
+
+    # Chromium-based: Chrome, Edge, Brave
+    _chromium = [
+        (r'%LOCALAPPDATA%\Google\Chrome\User Data\Default\Network\Cookies',
+         r'%LOCALAPPDATA%\Google\Chrome\User Data\Local State'),
+        (r'%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Network\Cookies',
+         r'%LOCALAPPDATA%\Microsoft\Edge\User Data\Local State'),
+        (r'%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Network\Cookies',
+         r'%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Local State'),
+    ]
+    for cookie_tmpl, ls_tmpl in _chromium:
+        cp = os.path.expandvars(cookie_tmpl)
+        lp = os.path.expandvars(ls_tmpl)
+        if not os.path.exists(cp) or not os.path.exists(lp):
+            continue
+        try:
+            with open(lp, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            enc_key = base64.b64decode(state['os_crypt']['encrypted_key'])
+            key = _dpapi_decrypt(enc_key[5:])
+            tmp = tempfile.mktemp(suffix='.nx.db')
+            shutil.copy2(cp, tmp)
+            try:
+                conn = sqlite3.connect(tmp)
+                for name, enc in conn.execute(
+                    "SELECT name, encrypted_value FROM cookies WHERE host_key LIKE '%nexusmods.com'"
+                ):
+                    try:
+                        results[name] = _chrome_aes_decrypt(bytes(enc), key)
+                    except Exception:
+                        pass
+                conn.close()
+            finally:
+                try: os.unlink(tmp)
+                except: pass
+            if results:
+                return results
+        except Exception:
+            continue
+
+    # Firefox (cookies em texto simples por defeito)
+    ff_base = os.path.expandvars(r'%APPDATA%\Mozilla\Firefox\Profiles')
+    for profile in _glob_module.glob(os.path.join(ff_base, '*.default*')):
+        db = os.path.join(profile, 'cookies.sqlite')
+        if not os.path.exists(db):
+            continue
+        try:
+            tmp = tempfile.mktemp(suffix='.nx.db')
+            shutil.copy2(db, tmp)
+            try:
+                conn = sqlite3.connect(tmp)
+                for name, val in conn.execute(
+                    "SELECT name, value FROM moz_cookies WHERE baseDomain = 'nexusmods.com'"
+                ):
+                    results[name] = val
+                conn.close()
+            finally:
+                try: os.unlink(tmp)
+                except: pass
+            if results:
+                return results
+        except Exception:
+            continue
+
+    return results
+
+def _nexus_slow_download_url(file_id: int) -> str:
+    """Obtém URL de download do Nexus para conta gratuita usando cookies do browser."""
+    cookies = _get_nexus_cookies()
+    if not cookies:
+        raise RuntimeError(
+            "Nenhum cookie do Nexus encontrado. "
+            "Abre o Chrome/Edge e faz login em nexusmods.com primeiro.")
+
+    if not _nexus_game_id:
+        raise RuntimeError("Game ID do Nexus não disponível ainda. Tenta novamente em 5 segundos.")
+
+    cookie_str = '; '.join(f'{k}={v}' for k, v in cookies.items())
+    headers = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/124.0.0.0 Safari/537.36'),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': f'https://www.nexusmods.com/{_NEXUS_DOMAIN}/mods/',
+        'Cookie': cookie_str,
+    }
+    popup_url = (f'https://www.nexusmods.com/Core/Libs/Common/Widgets/DownloadPopUp'
+                 f'?id={file_id}&game_id={_nexus_game_id}&source=FileExpander')
+    req = urllib.request.Request(popup_url, headers=headers)
+    with urllib.request.urlopen(req, timeout=20) as r:
+        html = r.read().decode('utf-8', errors='replace')
+
+    # Procurar URL CDN na resposta HTML
+    cdn_url = None
+    for pattern in [
+        r'href="(https://[^"]+(?:nexus-cdn\.com|staticdelivery\.nexusmods\.com)[^"]+)"',
+        r'"(https://[^"]+nexus-cdn\.com/[^"]+)"',
+        r"location\.href\s*=\s*'(https://[^']+nexus-cdn[^']+)'",
+        r'(https://[^\s"\']+\.(?:zip|pak|rar|7z)[^\s"\']{0,200}nexus[^\s"\']*)',
+    ]:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            cdn_url = m.group(1)
+            break
+
+    if not cdn_url:
+        # Tentar endpoint alternativo via redirect
+        # Se o utilizador não está logado, o HTML não terá o link
+        if 'sign_in' in html or 'log_in' in html or 'login' in html.lower()[:500]:
+            raise RuntimeError(
+                "Sessão do Nexus expirada. Abre o Chrome/Edge, "
+                "faz login em nexusmods.com e tenta novamente.")
+        raise RuntimeError(
+            "URL de download não encontrada. Verifica se tens sessão activa no Nexus.")
+
+    # SSRF guard
+    parsed = urllib.parse.urlparse(cdn_url)
+    host = (parsed.hostname or '').lower()
+    if not (host in _NEXUS_CDN_HOSTS or host.endswith('.nexus-cdn.com')
+            or 'nexusmods.com' in host):
+        raise RuntimeError(f"Host CDN inesperado: {host}")
+    if parsed.port is not None:
+        raise RuntimeError("Porta não standard no URL CDN")
+
+    return cdn_url
 
 async def _install_from_url(url: str, mod_name: str):
     """Download mod from a Nexus CDN URL and install it (no Nexus auth needed)."""

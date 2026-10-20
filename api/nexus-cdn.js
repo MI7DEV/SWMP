@@ -57,9 +57,10 @@ module.exports = async function handler(req, res) {
     );
 
     if (dlRes.status === 403 || dlRes.status === 401) {
-      // Free account — cannot get CDN link; let local server handle fallback
+      // Free account — cannot get CDN link via API; local server uses browser cookies
       return res.status(200).json({
         need_premium: true,
+        file_id: String(fileId),
         fallback_url: `https://www.nexusmods.com/${NX_GAME}/mods/${mod_id}?tab=files`,
         file_name: mainFile.file_name || mainFile.name || "mod",
       });
