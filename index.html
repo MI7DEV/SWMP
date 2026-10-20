@@ -1123,6 +1123,12 @@ async function _extractZip(data,dirHandle,modName){
 }
 
 async function installMod(modId,name,btn){
+  // Modo picker (conta gratuita): utilizador clicou em "Selecionar ZIP"
+  if(btn.dataset.pick==='1'){
+    delete btn.dataset.pick;
+    _installFromPicker(modId,name,btn);
+    return;
+  }
   if(_installing.has(modId)) return;
   _installing.add(modId);
   btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
@@ -1134,14 +1140,8 @@ async function installMod(modId,name,btn){
       // Conta gratuita: abrir Nexus + pedir ao utilizador que selecione o zip descarregado
       window.open(cdn.fallback_url,'_blank');
       btn.textContent='Selecionar ZIP';btn.disabled=false;btn.style.opacity='';
+      btn.dataset.pick='1';
       _installing.delete(modId);
-      (function(mId,mName,b){
-        b.onclick=null;
-        b.addEventListener('click',function onPick(){
-          b.removeEventListener('click',onPick);
-          _installFromPicker(mId,mName,b);
-        },{once:true});
-      })(modId,name,btn);
       return;
     }
     // 2. Descarregar ZIP do CDN
@@ -1172,6 +1172,7 @@ async function _installFromPicker(modId,name,btn){
     var [fh]=await window.showOpenFilePicker({types:[{description:'Mod ZIP',accept:{'application/zip':['.zip']}}],multiple:false});
     var file=await fh.getFile();
     var data=await file.arrayBuffer();
+    btn.textContent='A extrair...';
     var dir=await _getModsDir();
     if(!dir) throw new Error('Pasta não selecionada');
     await _extractZip(data,dir,name);
@@ -1179,7 +1180,8 @@ async function _installFromPicker(modId,name,btn){
     _installing.delete(modId);
     renderGrid();
   }catch(e){
-    btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+    btn.textContent='Selecionar ZIP';btn.disabled=false;btn.style.opacity='';
+    btn.dataset.pick='1';
     _installing.delete(modId);
   }
 }
@@ -1284,20 +1286,14 @@ function renderGrid(){
     var btn=card.querySelector('.install-btn');
     if(btn){
       if(inst){
-        if(_isHost&&_uninstalling.has(m.name)){btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';}
+        if(_uninstalling.has(m.name)){btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';}
         (function(modName,b){
-          b.addEventListener('click',function(){
-            if(!_isHost){_hipShow();return;}
-            uninstallMod(modName,b);
-          });
+          b.addEventListener('click',function(){ uninstallMod(modName,b); });
         })(m.name,btn);
       } else {
-        if(_isHost&&_installing.has(m.mod_id)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
+        if(_installing.has(m.mod_id)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
         (function(modId,modName,b){
-          b.addEventListener('click',function(){
-            if(!_isHost){_hipShow();return;}
-            installMod(modId,modName,b);
-          });
+          b.addEventListener('click',function(){ installMod(modId,modName,b); });
         })(m.mod_id,m.name,btn);
       }
     }
