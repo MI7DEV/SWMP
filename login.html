@@ -33,7 +33,7 @@ button:disabled{opacity:.6;cursor:wait}
 <script>
 // só volta para páginas deste mesmo site
 var next='/';
-try{ var u=new URL(new URLSearchParams(location.search).get('next')||'/',location.origin); if(u.origin===location.origin) next=u.pathname+u.search+u.hash; }catch(e){}
+try{ var u=new URL(new URLSearchParams(location.search).get('next')||'/',location.origin); if(u.origin===location.origin) next=u.href; }catch(e){}
 document.getElementById('f').addEventListener('submit',async function(ev){
   ev.preventDefault();
   var b=document.getElementById('b'), err=document.getElementById('err');
