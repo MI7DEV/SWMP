@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.12
+-- ZeroCompanyMP/main.lua — v0.13
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -107,6 +107,7 @@ local last_team_name = ""
 local last_player_turn = nil
 local sync_seq       = 0     -- sequência para deduplicação de mensagens
 local combat_grace_until = 0 -- até aqui o mod não toca em objetos do jogo (início do combate)
+local combat_started_at  = 0 -- os.time() do último TacticalGameState criado
 
 -- ─── IO ───────────────────────────────────────────────────────────────────────
 local function read_file(path)
@@ -359,6 +360,7 @@ local function register_combat_hooks()
             if not valid(gs) then return end
             combat_active = true
             combat_grace_until = os.time() + 6   -- o mapa de combate ainda está a montar objetos
+            combat_started_at = os.time()
             print("[ZeroCompanyMP] TacticalGameState: combate ativo.")
             ExecuteWithDelay(7000, function() in_game_thread(function()
                 run_explorer()
@@ -457,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.12 carregado")
+print(" ZeroCompanyMP v0.13 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -934,6 +936,112 @@ end)
 -- ignora comandos antigos que já estavam no ficheiro ao arrancar
 do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
 
+-- ─── Batalha Rápida: mapa escolhido → esquadrão → combate direto ──────────────
+-- Usa o lançamento rápido que os programadores deixaram no jogo (B_QuickLaunchViewModel + BRG_MissionTestingSettings).
+-- O portal escreve mp_qb_cmd.json {"cmd":"launch","world":"/Game/.../SK_Ryloth_010_Root.SK_Ryloth_010_Root","pvp":bool,"ts":N};
+-- o mod escreve a lista de mapas em mp_qb_worlds.json e o estado em mp_qb.json.
+local QB_CMD, QB_STATE, QB_WORLDS = MOD_PATH .. "\\mp_qb_cmd.json", MOD_PATH .. "\\mp_qb.json", MOD_PATH .. "\\mp_qb_worlds.json"
+local qb = { cmd_ts = 0, pvp = false, restore = false, worlds_done = false, launched_at = 0 }
+do local raw = read_file(QB_CMD); if raw then qb.cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
+
+local function qb_state(status)
+    write_file(QB_STATE, json.encode({ status = status, ts = os.time() }))
+    print("[ZeroCompanyMP] Batalha Rápida: " .. status)
+end
+
+local function qb_worlds()
+    local gi = FindFirstOf("GameInstance")
+    if not valid(gi) then return nil end
+    local ok, ws = pcall(function() return gi:GetStartingWorlds() end)
+    if not ok or type(ws) ~= "table" then return nil end
+    local list = {}
+    for _, w in ipairs(ws) do
+        local v = w
+        pcall(function() v = w:get() end)
+        local e = {}
+        pcall(function()
+            e.Name, e.Category, e.WorldPath = v.Name:ToString(), v.Category:ToString(), v.WorldPath:ToString()
+            e.bEuropa, e.bShowInQuickLaunch = v.bEuropa, v.bShowInQuickLaunch
+            e.bAllowOnConsoles, e.bAllowInShipping = v.bAllowOnConsoles, v.bAllowInShipping
+        end)
+        if e.WorldPath and (e.Category:find("^Missions") or e.Category == "Story") then list[#list + 1] = e end
+    end
+    return list
+end
+
+-- o ViewModel do menu "MissionTest" escondido no menu principal (existe só no menu principal)
+local function qb_vm()
+    local any
+    for _, vm in ipairs(FindAllOf("B_QuickLaunchViewModel") or {}) do
+        if valid(vm) then
+            local ctx
+            pcall(function() ctx = vm.ContextObject end)
+            if valid(ctx) and ctx:GetClass():GetFName():ToString():find("MissionTest") then return vm end
+            any = any or vm
+        end
+    end
+    return any
+end
+
+local function qb_mission_testing(on, world)
+    local mt = StaticFindObject("/Script/BitReactorGame.Default__BRG_MissionTestingSettings")
+    if not valid(mt) then return false end
+    pcall(function() mt.bEnableMissionTesting = on end)
+    if world then
+        pcall(function() mt.Mission.World = world end)
+        pcall(function() mt.Mission.MissionName = world.Name end)
+    end
+    return true
+end
+
+local function qb_launch(world_path, pvp)
+    local list = qb_worlds()
+    if not list then return qb_state("erro: lista de mapas indisponível") end
+    local w
+    for _, e in ipairs(list) do if e.WorldPath == world_path then w = e end end
+    if not w then return qb_state("erro: mapa desconhecido") end
+    local vm = qb_vm()
+    if not vm then return qb_state("erro: volta ao menu principal do jogo e tenta de novo") end
+    qb_mission_testing(true, w)
+    local log = {}
+    local function step(name, fn)
+        local ok, r = pcall(fn)
+        log[#log + 1] = name .. "=" .. (ok and tostring(r) or ("ERRO " .. tostring(r)))
+        return ok, r
+    end
+    step("config", function() return vm:TrySettingMissionTestingConfigurations() end)
+    step("mundo", function() return vm:SetDesiredWorld(w) end)
+    step("esquadrão", function() return vm:TrySettingDesiredSquadFromMissionTesting() end)
+    local _, ready = step("pronto", function() return vm:IsReadyForQuickLaunch() end)
+    print("[ZeroCompanyMP] Batalha Rápida: " .. w.Name .. " — " .. table.concat(log, " "))
+    step("lançar", function() return vm:TryQuickLaunching() end)
+    qb.pvp, qb.restore, qb.launched_at = pvp and true or false, true, os.time()
+    qb_state("a carregar " .. w.Name .. (pvp and " (1x1)" or "") .. " — " .. table.concat(log, " "))
+end
+
+local function qb_poll()
+    if not qb.worlds_done then
+        local list = qb_worlds()
+        if list and #list > 0 then write_file(QB_WORLDS, json.encode(list)); qb.worlds_done = true end
+    end
+    local raw = read_file(QB_CMD)
+    if not raw then return end
+    local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+    if ts <= qb.cmd_ts then return end
+    qb.cmd_ts = ts
+    local ok, c = pcall(json.decode, raw)
+    if ok and type(c) == "table" and c.cmd == "launch" and type(c.world) == "string" then qb_launch(c.world, c.pvp) end
+end
+
+-- já em combate: desliga o Mission Testing (não mexe na campanha) e liga o 1x1 se foi pedido
+local function qb_after_combat_start()
+    if not qb.restore or combat_started_at < qb.launched_at then return end
+    qb.restore = false
+    qb_mission_testing(false)
+    qb_state("em combate")
+    if qb.pvp then qb.pvp = false; pvp_set(true) end
+end
+
 local tick_queued = false
 local function tick()
     tick_queued = false
@@ -945,6 +1053,8 @@ local function tick()
     end
     pcall(poll)
     pcall(pvp_poll)
+    pcall(qb_poll)
+    pcall(qb_after_combat_start)
     if scene_tick % 2 == 0 then pcall(update_scene); pcall(ig_tick); pcall(apply_music_mute) end
 end
 -- o temporizador corre fora da thread do jogo: só agenda; o trabalho com objetos do jogo corre na thread do jogo

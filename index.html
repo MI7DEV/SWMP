@@ -368,6 +368,25 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 
 
 
+  <!-- ── Batalha Rápida: mapa → combate direto (lançamento rápido do próprio jogo) ── -->
+  <div id="qb-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ⚡ Batalha Rápida <span id="qb-state" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">—</span>
+    </h2>
+    <p style="font-size:12px;color:var(--fg2);line-height:1.7;margin-bottom:12px">
+      Sem campanha: escolhe um mapa e o jogo carrega direto para o combate. Com o jogo aberto no <b style="color:var(--fg)">menu principal</b>,
+      escolhe o mapa e carrega em <b style="color:var(--fg)">LANÇAR</b>. Marca <b style="color:var(--fg)">1x1</b> para o amigo (Remote Play) controlar os inimigos.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="qb-world" style="flex:1 1 260px;min-width:0;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:12px">
+        <option value="">Abre o jogo uma vez para carregar a lista de mapas…</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg);cursor:pointer"><input type="checkbox" id="qb-pvp"> 1x1</label>
+      <button class="install-btn" id="qb-go" style="flex:0 0 auto;padding:9px 18px">⚡ LANÇAR</button>
+    </div>
+    <div id="qb-info" style="font-size:12px;color:var(--fg2);margin-top:8px"></div>
+  </div>
+
   <!-- ── Batalha 1x1 (PvP) ── -->
   <div id="pvp-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -2205,6 +2224,50 @@ async function _pvpPoll(){
     else if(d.active&&fresh) document.getElementById('pvp-info').textContent='Ronda '+(d.round||'—')+' · vez de: '+(d.current||'—')+' · '+(d.units||0)+' unidades em campo';
   }catch(e){}
 }
+// ── Batalha Rápida: o mod lê mp_qb_cmd.json; a lista de mapas vem do jogo (mp_qb_worlds.json), o estado de mp_qb.json ──
+var QB_CMD_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb_cmd.json';
+var QB_STATE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb.json';
+var QB_WORLDS_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb_worlds.json';
+var QB_CAT={'Missions.Skirmishes':'⚔ Escaramuças','Missions.Hero':'★ Missões de herói','Story':'📖 Missões da história'};
+var _qbWorldsLoaded=false;
+async function _qbLoadWorlds(root){
+  var txt=await _readText(root,QB_WORLDS_FILE); if(!txt) return false;
+  var list=JSON.parse(txt), sel=document.getElementById('qb-world'), keep=sel.value, groups={};
+  list.forEach(function(w){ var k=Object.keys(QB_CAT).find(function(c){return w.Category.indexOf(c)===0;})||w.Category; (groups[k]=groups[k]||[]).push(w); });
+  sel.innerHTML='';
+  Object.keys(groups).forEach(function(k){
+    var og=document.createElement('optgroup'); og.label=QB_CAT[k]||k;
+    groups[k].forEach(function(w){ var o=document.createElement('option'); o.value=w.WorldPath; o.textContent=w.Name.replace(/^HM_/,'Herói ').replace(/_/g,' '); og.appendChild(o); });
+    sel.appendChild(og);
+  });
+  if(keep) sel.value=keep;
+  try{ var last=await _idbGet('qb:world'); if(!keep&&last) sel.value=last; }catch(e){}
+  _qbWorldsLoaded=true; return true;
+}
+async function _qbGo(){
+  var info=document.getElementById('qb-info'), world=document.getElementById('qb-world').value;
+  try{
+    var root=await _getModsDir(); if(!root) return;
+    if(!_qbWorldsLoaded&&!(await _qbLoadWorlds(root))){ info.textContent='Abre o jogo (com o mod ZeroCompanyMP v0.13+) até ao menu principal e tenta de novo.'; return; }
+    world=document.getElementById('qb-world').value; if(!world){ info.textContent='Escolhe um mapa.'; return; }
+    _idbSet('qb:world',world);
+    await _writeFile(root,QB_CMD_FILE,JSON.stringify({cmd:'launch',world:world,pvp:document.getElementById('qb-pvp').checked,ts:Math.floor(Date.now()/1000)}));
+    info.textContent='Pedido enviado ao jogo…'; setTimeout(_qbPoll,2500);
+  }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
+}
+async function _qbPoll(){
+  if(!_modsDir||document.querySelector('.page.on')?.dataset.page!=='coop') return;
+  try{
+    if(await _modsDir.queryPermission({mode:'readwrite'})!=='granted') return;
+    if(!_qbWorldsLoaded) await _qbLoadWorlds(_modsDir);
+    var txt=await _readText(_modsDir,QB_STATE_FILE); if(!txt) return;
+    var d=JSON.parse(txt), fresh=Date.now()/1000-(d.ts||0)<600;
+    document.getElementById('qb-state').textContent=fresh?(String(d.status).indexOf('erro')===0?'erro':String(d.status).split(' — ')[0]):'—';
+    if(fresh) document.getElementById('qb-info').textContent=String(d.status).split(' — ')[0];
+  }catch(e){}
+}
+document.getElementById('qb-go').addEventListener('click',_qbGo);
+setInterval(_qbPoll,3000);
 document.getElementById('pvp-on').addEventListener('click',function(){_pvpCmd('on');});
 document.getElementById('pvp-off').addEventListener('click',function(){_pvpCmd('off');});
 setInterval(_pvpPoll,3000);
