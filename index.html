@@ -271,8 +271,10 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <div class="dot" id="srv-dot"></div>
       <span id="srv-label">Servidor</span>
     </div>
+    <a href="/api/logout" id="who" title="Sair" style="font-size:11px;color:var(--fg2);text-decoration:none;white-space:nowrap">⏻ sair</a>
   </div>
 </header>
+<script>fetch('/api/login').then(function(r){return r.json();}).then(function(d){if(d.user)document.getElementById('who').textContent='👤 '+d.user+' · sair';}).catch(function(){});</script>
 
 <main>
   <div class="action-row">
@@ -1408,15 +1410,27 @@ function renderMegaGrid(){
 }
 
 // Ficheiros alojados no próprio site (/mods/); o mirror só é usado se o site falhar
-async function _fetchZip(url,mirror){
+async function _fetchZip(url,mirror,btn){
   var cached=await _idbGet('zip:'+url);
   if(cached) return cached;
   var resp;
-  try{ resp=await fetch(url,{signal:AbortSignal.timeout(300000)}); }catch(e){ resp=null; }
+  try{ resp=await fetch(url,{signal:AbortSignal.timeout(1800000)}); }catch(e){ resp=null; }
+  if(resp&&resp.status===401){ location.href='/login.html?next='+encodeURIComponent(location.pathname); throw new Error('Sessão expirada — entra de novo'); }
   if((!resp||!resp.ok)&&mirror) resp=await fetch(mirror,{signal:AbortSignal.timeout(300000)});
   if(!resp||!resp.ok) throw new Error('Download falhou (HTTP '+(resp?resp.status:'rede')+')');
-  var data=await resp.arrayBuffer();
-  _idbSet('zip:'+url,data);
+  var total=+resp.headers.get('content-length')||0, data;
+  if(btn&&resp.body&&total>2e6){
+    // ficheiros grandes: mostra a percentagem no botão
+    var reader=resp.body.getReader(), buf=new Uint8Array(total), got=0;
+    for(;;){
+      var c=await reader.read(); if(c.done) break;
+      if(got+c.value.length>buf.length){ var nb=new Uint8Array(Math.max(buf.length*2,got+c.value.length)); nb.set(buf.subarray(0,got)); buf=nb; }
+      buf.set(c.value,got); got+=c.value.length;
+      btn.textContent='A transferir '+Math.floor(got*100/total)+'%';
+    }
+    data=buf.buffer.slice(0,got);
+  } else data=await resp.arrayBuffer();
+  if(data.byteLength<150e6) _idbSet('zip:'+url,data);   // os enormes não ficam em cache no browser
   return data;
 }
 
@@ -1441,7 +1455,7 @@ async function _installCatalogMod(root,mod,optIdx,btn){
     }
   }else{
     if(btn) btn.textContent='A descarregar...';
-    var data=await _fetchZip(opt.url,opt.mirror);
+    var data=await _fetchZip(opt.url,opt.mirror,btn);
     if(btn) btn.textContent='A instalar...';
     try{ man=await _installZipData(data,root,opt,mod.id); }
     catch(e){

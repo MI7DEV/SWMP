@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWMP — Entrar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07090f;--bg2:#0d1117;--fg:#e2e8f0;--fg2:#94a3b8;--gold:#f5c518;--border:rgba(245,197,24,0.18);--red:#f87171}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'Exo 2',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+form{width:100%;max-width:340px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 24px;display:flex;flex-direction:column;gap:14px}
+h1{font-family:'Orbitron',sans-serif;font-weight:900;letter-spacing:.12em;color:var(--gold);font-size:22px;text-align:center;text-shadow:0 0 20px rgba(245,197,24,.35)}
+p{font-size:12px;color:var(--fg2);text-align:center;margin-top:-6px}
+label{font-size:12px;color:var(--fg2);display:flex;flex-direction:column;gap:6px}
+input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--fg);padding:10px 12px;font:inherit;font-size:15px}
+input:focus{outline:none;border-color:var(--gold)}
+button{background:var(--gold);color:#111;border:none;border-radius:8px;padding:11px;font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.1em;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+#err{color:var(--red);font-size:13px;text-align:center;min-height:16px}
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>SWMP</h1>
+  <p>Acesso restrito</p>
+  <label>Utilizador<input id="u" autocomplete="username" autocapitalize="none" required></label>
+  <label>Senha<input id="p" type="password" autocomplete="current-password" required></label>
+  <button id="b" type="submit">ENTRAR</button>
+  <div id="err"></div>
+</form>
+<script>
+var next=new URLSearchParams(location.search).get('next')||'/';
+if(!/^\/(?!\/)/.test(next)) next='/';
+document.getElementById('f').addEventListener('submit',async function(ev){
+  ev.preventDefault();
+  var b=document.getElementById('b'), err=document.getElementById('err');
+  b.disabled=true; err.textContent='';
+  try{
+    var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user:document.getElementById('u').value,pass:document.getElementById('p').value})});
+    if(r.ok){ location.replace(next); return; }
+    var d=await r.json().catch(function(){return {};});
+    err.textContent=d.error||'Não foi possível entrar';
+  }catch(e){ err.textContent='Sem ligação ao servidor'; }
+  b.disabled=false;
+});
+</script>
+</body>
+</html>
