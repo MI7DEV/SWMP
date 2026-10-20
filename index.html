@@ -1216,7 +1216,7 @@ async function _installZipData(data,root,opt,fallbackName){
   }
   // 1b. ZIP já com o layout da pasta do jogo (SWZeroCompany/Binaries/…, Content/Paks/…, Mods/<Plugin>/…)
   var rel0=entries.map(function(e){return e.path.replace(/^SWZeroCompany\//i,'');});
-  if(rel0.some(function(p){return /^(binaries\/win64\/|content\/paks\/)/i.test(p);})){
+  if(rel0.some(function(p){return /^(binaries\/win64\/|content\/paks\/|mods\/[^\/]+\/[^\/]+\.uplugin$)/i.test(p);})){
     var owned={}, luaMods={};
     rel0.forEach(function(p){
       var m;

@@ -6,3 +6,6 @@ node_modules/
 dist/
 build/
 *.spec
+
+# Mods transferidos do Nexus com a conta do Marco — só cópia local, não publicar
+mods/nexus/
