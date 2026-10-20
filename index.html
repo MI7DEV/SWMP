@@ -3,7 +3,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
@@ -2072,7 +2072,7 @@ var _lamePromise=null;
 function _musLame(){
   if(window.lamejs) return Promise.resolve();
   return _lamePromise=_lamePromise||new Promise(function(ok,ko){
-    var sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+    var sc=document.createElement('script'); sc.src='/vendor/lame.min.js'; sc.integrity='sha384-xuasJXVcyv3hZq0eYpelEkBC8l4yufatZXDsKuyCU2rqfhDCb+ftuE/mSfZAteiK';   // lamejs 1.2.1, alojado no site
     sc.onload=ok; sc.onerror=function(){_lamePromise=null;ko(new Error('conversor MP3 indisponível'));}; document.head.appendChild(sc);
   });
 }
