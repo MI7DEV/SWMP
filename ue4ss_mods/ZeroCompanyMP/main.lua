@@ -3,7 +3,8 @@
 -- Módulo do jogo: BitReactorGame
 
 local JSON_OK, json = pcall(require, "json")
-local MOD_PATH    = debug.getinfo(1).short_src:match("^(.+)[/\\]") or "."
+-- caminho completo do script ("@C:\...\main.lua"); short_src é truncado ("...inaries\Win64") e não serve
+local MOD_PATH    = (debug.getinfo(1, "S").source or ""):gsub("^@", ""):match("^(.+)[/\\]") or "."
 local CMD_FILE    = MOD_PATH .. "\\mp_command.json"
 local RESULT_FILE = MOD_PATH .. "\\mp_result.json"
 local SYNC_OUT    = MOD_PATH .. "\\mp_sync_out.json"
@@ -330,15 +331,103 @@ ExecuteWithDelay(3000, function()
 end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.4 carregado")
+print(" ZeroCompanyMP v0.5 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
 print(" TurnState: TacticalGameState.CurrentRound+CurrentTeamTurn")
 print("==============================================")
 
+-- ─── Cena atual (para a trilha sonora dinâmica do portal) ─────────────────────
+-- Escreve mp_scene.json: {"scene":"menu|strategy|combat","map":"...","ts":N}
+local SCENE_FILE   = MOD_PATH .. "\\mp_scene.json"
+local last_scene   = ""
+local last_map     = ""
+local last_scene_t = 0
+
+local function current_map()
+    local ok, name = pcall(function()
+        local w = FindFirstOf("World")
+        if not valid(w) then return "" end
+        return w:GetFullName()
+    end)
+    return (ok and name) or ""
+end
+
+-- Tipo de música que o próprio jogo pediu (BrunoMusicSubSystem:PlayBrunoMusic, EMusicType do SDK)
+local MUSIC_TYPES = { [1] = "menu", [2] = "strategy", [3] = "explore", [4] = "combat" }
+local game_music  = ""
+
+pcall(function()
+    RegisterHook("/Script/BitReactorGame.BrunoMusicSubSystem:PlayBrunoMusic",
+        function(_self, _player, music_type)
+            local ok, v = pcall(function() return music_type:get() end)
+            if ok and MUSIC_TYPES[v] then game_music = MUSIC_TYPES[v] end
+        end)
+    print("[ZeroCompanyMP] Hook PlayBrunoMusic: OK")
+end)
+
+local function detect_scene()
+    local map = current_map()
+    if game_music ~= "" then return game_music, map end
+    -- fallback por classes do SDK: TacticalGameState (missão), StrategyGameState (base/campanha)
+    if valid(FindFirstOf("TacticalGameState")) then return "combat", map end
+    if valid(FindFirstOf("StrategyGameState")) then return "strategy", map end
+    return "menu", map
+end
+
+-- ─── Silenciar a música original enquanto a trilha do portal toca ─────────────
+-- O portal escreve mp_music.json {"mute":true|false,"ts":N}; o volume original fica em mp_music_orig.txt
+local MUSIC_CTRL = MOD_PATH .. "\\mp_music.json"
+local MUSIC_ORIG = MOD_PATH .. "\\mp_music_orig.txt"
+local muted_now  = nil
+
+local function user_settings()
+    local s = FindFirstOf("BitReactorUserSettingsLocal")
+    if valid(s) then return s end
+    return nil
+end
+
+local function apply_music_mute()
+    local raw = read_file(MUSIC_CTRL)
+    local want = raw ~= nil and raw:find('"mute"%s*:%s*true') ~= nil
+    -- o portal renova "ts" a cada poucos segundos; sem sinal há 20s (página fechada) → repõe a música
+    local ts = raw and tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+    if want and os.time() - ts > 20 then want = false end
+    if want == muted_now then return end
+    local s = user_settings()
+    if not s then return end
+    if want then
+        local cur = s:GetMusicVolume()
+        if cur and cur > 0.001 and not read_file(MUSIC_ORIG) then write_file(MUSIC_ORIG, tostring(cur)) end
+        s:SetMusicVolume(0.0)
+        print("[ZeroCompanyMP] Musica do jogo silenciada (trilha SWMP ativa)")
+    elseif muted_now ~= nil or read_file(MUSIC_ORIG) then
+        local orig = tonumber(read_file(MUSIC_ORIG) or "") or 1.0
+        s:SetMusicVolume(orig)
+        os.remove(MUSIC_ORIG)
+        print("[ZeroCompanyMP] Musica do jogo reposta: " .. tostring(orig))
+    end
+    muted_now = want
+end
+
+local function update_scene()
+    local now = os.time()
+    local ok, scene, map = pcall(detect_scene)
+    if not ok then return end
+    -- reescreve a cada 10s mesmo sem mudanças (o portal usa o ts para saber se o jogo está vivo)
+    if scene == last_scene and map == last_map and now - last_scene_t < 10 then return end
+    if scene ~= last_scene then print("[ZeroCompanyMP] Cena: " .. scene .. " (" .. map .. ")") end
+    last_scene, last_map, last_scene_t = scene, map, now
+    local safe_map = map:gsub("\\", "/"):gsub('"', "")
+    write_file(SCENE_FILE, ('{"scene":"%s","map":"%s","ts":%d}'):format(scene, safe_map, now))
+end
+
+local scene_tick = 0
 local function loop()
     poll()
+    scene_tick = scene_tick + 1
+    if scene_tick % 2 == 0 then pcall(update_scene); pcall(apply_music_mute) end
     ExecuteWithDelay(1000, loop)
 end
 loop()
