@@ -8,16 +8,8 @@
   },
   "routes": [
     {
-      "src": "/api/nexus/browse",
-      "dest": "/api/nexus.js"
-    },
-    {
       "src": "/api/nexus/installed",
       "dest": "/api/nexus-installed.js"
-    },
-    {
-      "src": "/api/nexus",
-      "dest": "/api/nexus.js"
     },
     {
       "src": "/api/config",
@@ -30,10 +22,6 @@
     {
       "src": "/api/health",
       "dest": "/api/health.js"
-    },
-    {
-      "src": "/api/nexus-cdn",
-      "dest": "/api/nexus-cdn.js"
     },
     {
       "src": "/client",
@@ -49,6 +37,13 @@
         "Cache-Control": "public, max-age=300"
       },
       "dest": "/mods-catalog.json"
+    },
+    {
+      "src": "/mods/(.*\\.zip)",
+      "headers": {
+        "Cache-Control": "public, max-age=86400"
+      },
+      "dest": "/mods/$1"
     },
     {
       "src": "/(.*)",

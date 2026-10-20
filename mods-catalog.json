@@ -4,21 +4,20 @@
   {
    "id": "ue4ss",
    "name": "UE4SS para Zero Company (obrigatório p/ mods Lua)",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-ue4ss-for-star-wars-zero-company-mod-v1-0",
    "desc": "Build compatível com o jogo. Necessário para todos os mods de script e para o multiplayer.",
    "type": "loader",
    "options": [
     {
      "label": "v3.0.1-1092",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/UE4SS_v3.0.1-1092_for_StarWarsZeroCompany_v1.0.zip",
-     "size": 8703618
+     "url": "/mods/UE4SS_v3.0.1-1092_for_StarWarsZeroCompany_v1.0.zip",
+     "size": 8703618,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/UE4SS_v3.0.1-1092_for_StarWarsZeroCompany_v1.0.zip"
     }
    ]
   },
   {
    "id": "zerocompanymp",
    "name": "ZeroCompanyMP (multiplayer SWMP)",
-   "page_url": "",
    "desc": "Mod de integração multiplayer deste projeto. Requer UE4SS.",
    "type": "lua-files",
    "options": [
@@ -33,418 +32,448 @@
   {
    "id": "cheaper-actions",
    "name": "Cheaper Actions",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-cheaper-actions-mod-v1-3-1",
    "desc": "Ações mais baratas em pontos de ação.",
    "type": "pak",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_CheaperActions_Pak_v1.0.zip",
-     "size": 2872
+     "url": "/mods/StarWarsZeroCompany_CheaperActions_Pak_v1.0.zip",
+     "size": 2872,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_CheaperActions_Pak_v1.0.zip"
     }
    ]
   },
   {
    "id": "one-ap",
    "name": "Everything Costs One Action Point",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-cheaper-actions-mod-v1-3-1",
    "desc": "Todas as ações custam 1 AP.",
    "type": "pak",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_EverythingCostsOneActionPoint_Pak_v1.1.zip",
-     "size": 4818
+     "url": "/mods/StarWarsZeroCompany_EverythingCostsOneActionPoint_Pak_v1.1.zip",
+     "size": 4818,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_EverythingCostsOneActionPoint_Pak_v1.1.zip"
     }
    ]
   },
   {
    "id": "half-adv",
    "name": "Half Advancement Points Needed",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-cheaper-actions-mod-v1-3-1",
    "desc": "Metade dos pontos de avanço necessários.",
    "type": "pak",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_HalfAdvPointsNeeded_Pak_v1.3.1.zip",
-     "size": 2957
+     "url": "/mods/StarWarsZeroCompany_HalfAdvPointsNeeded_Pak_v1.3.1.zip",
+     "size": 2957,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_HalfAdvPointsNeeded_Pak_v1.3.1.zip"
     }
    ]
   },
   {
    "id": "movement-ap",
    "name": "Movement & AP Economy",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-cheaper-actions-mod-v1-3-1",
    "desc": "Economia de movimento e AP (script UE4SS).",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MovementAndAPEconomyUE4SS_v1.3.1.zip",
-     "size": 3504
+     "url": "/mods/StarWarsZeroCompany_MovementAndAPEconomyUE4SS_v1.3.1.zip",
+     "size": 3504,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MovementAndAPEconomyUE4SS_v1.3.1.zip"
     }
    ]
   },
   {
    "id": "rocket-strike",
    "name": "Rocket Strike ADV5",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-cheaper-actions-mod-v1-3-1",
    "desc": "Ajuste do Rocket Strike.",
    "type": "pak",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_RocketStrikeADV5_Pak_v1.3.5.zip",
-     "size": 11196
+     "url": "/mods/StarWarsZeroCompany_RocketStrikeADV5_Pak_v1.3.5.zip",
+     "size": 11196,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_RocketStrikeADV5_Pak_v1.3.5.zip"
     }
    ]
   },
   {
    "id": "swift-combat",
    "name": "Swift Combat & Retaliation",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-swift-combat-and-retaliation-mod-v2-2-0",
    "desc": "Combate mais rápido e retaliação.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_SwiftCombatandRetaliation_v2.2.0.zip",
-     "size": 18807
+     "url": "/mods/StarWarsZeroCompany_SwiftCombatandRetaliation_v2.2.0.zip",
+     "size": 18807,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_SwiftCombatandRetaliation_v2.2.0.zip"
     }
    ]
   },
   {
    "id": "skip-tutorial",
    "name": "Skip Tutorial / Permadeath / Beskar Switcher",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-skip-tutorial-level-and-permadeath-and-beskar-switcher-mod-v1-0",
    "desc": "Saltar tutorial e opções extra.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_SkipTutorialAndOptions_v1.0.zip",
-     "size": 3441
+     "url": "/mods/StarWarsZeroCompany_SkipTutorialAndOptions_v1.0.zip",
+     "size": 3441,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_SkipTutorialAndOptions_v1.0.zip"
     }
    ]
   },
   {
    "id": "fast-resonance",
    "name": "Fast Resonance",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-fast-resonance-mod-v1-0-2",
    "desc": "Ressonância mais rápida.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_FastResonance_v1.0.2.zip",
-     "size": 10164
+     "url": "/mods/StarWarsZeroCompany_FastResonance_v1.0.2.zip",
+     "size": 10164,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_FastResonance_v1.0.2.zip"
     }
    ]
   },
   {
    "id": "time-control",
    "name": "Mission & Campaign Time Control",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-mission-and-campaign-time-control-mod-v1-0",
    "desc": "Controlo do tempo de missões e campanha.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MissionAndCampaignTimeControl_v1.0.zip",
-     "size": 3661
+     "url": "/mods/StarWarsZeroCompany_MissionAndCampaignTimeControl_v1.0.zip",
+     "size": 3661,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MissionAndCampaignTimeControl_v1.0.zip"
     }
    ]
   },
   {
    "id": "weapon-buff",
    "name": "All Player Weapon Buff",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-all-player-weapon-buff-mod-v1-0",
    "desc": "Dano das armas do jogador aumentado.",
    "type": "pak",
    "options": [
     {
      "label": "x1.5",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x1.5_v1.0.zip",
-     "size": 5955
+     "url": "/mods/StarWarsZeroCompany_AllPlayerWeaponBuff_x1.5_v1.0.zip",
+     "size": 5955,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x1.5_v1.0.zip"
     },
     {
      "label": "x2",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x2_v1.0.zip",
-     "size": 5990
+     "url": "/mods/StarWarsZeroCompany_AllPlayerWeaponBuff_x2_v1.0.zip",
+     "size": 5990,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x2_v1.0.zip"
     },
     {
      "label": "x3",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x3_v1.0.zip",
-     "size": 5926
+     "url": "/mods/StarWarsZeroCompany_AllPlayerWeaponBuff_x3_v1.0.zip",
+     "size": 5926,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_AllPlayerWeaponBuff_x3_v1.0.zip"
     }
    ]
   },
   {
    "id": "more-contacts",
    "name": "More Contacts",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-more-contacts-mod-v1-0",
    "desc": "Mais contactos.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MoreContacts_v1.0.zip",
-     "size": 1122
+     "url": "/mods/StarWarsZeroCompany_MoreContacts_v1.0.zip",
+     "size": 1122,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MoreContacts_v1.0.zip"
     }
    ]
   },
   {
    "id": "more-capacitors",
    "name": "More Capacitors",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-more-capacitors-mod-v1-0",
    "desc": "Mais capacitores.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MoreCapacitors_v1.0.zip",
-     "size": 1116
+     "url": "/mods/StarWarsZeroCompany_MoreCapacitors_v1.0.zip",
+     "size": 1116,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MoreCapacitors_v1.0.zip"
     }
    ]
   },
   {
    "id": "upgrade-discounts",
    "name": "Upgrade Discounts & Durations",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-upgrade-discounts-and-durations-mod-v2-0",
    "desc": "Upgrades mais baratos e/ou mais rápidos.",
    "type": "pak",
    "options": [
     {
      "label": "25% (Big Cheat) / 25% (1 Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (1 Cycle)"
+     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (1 Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "25% (Big Cheat) / 25% (Instant)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (Instant)"
+     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (Instant)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "25% (Big Cheat) / 25% (Vanilla Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (Vanilla Cycle)"
+     "sub": "Upgrade Discounts & Duration/25% (Big Cheat)/25% (Vanilla Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "50% (Med Cheat) / 50% (1 Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (1 Cycle)"
+     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (1 Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "50% (Med Cheat) / 50% (Instant)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (Instant)"
+     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (Instant)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "50% (Med Cheat) / 50% (Vanilla Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (Vanilla Cycle)"
+     "sub": "Upgrade Discounts & Duration/50% (Med Cheat)/50% (Vanilla Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "75% (Smol Cheat) / 75% (1 Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (1 Cycle)"
+     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (1 Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "75% (Smol Cheat) / 75% (Instant)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (Instant)"
+     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (Instant)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "75% (Smol Cheat) / 75% (Vanilla Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (Vanilla Cycle)"
+     "sub": "Upgrade Discounts & Duration/75% (Smol Cheat)/75% (Vanilla Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "Free (Mega Cheat) / Free (1 Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (1 Cycle)"
+     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (1 Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "Free (Mega Cheat) / Free (Instant)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (Instant)"
+     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (Instant)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     },
     {
      "label": "Free (Mega Cheat) / Free (Vanilla Cycle)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
+     "url": "/mods/SWZC_UpgradeDiscountsandDuration_v2.0.zip",
      "size": 589156,
-     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (Vanilla Cycle)"
+     "sub": "Upgrade Discounts & Duration/Free (Mega Cheat)/Free (Vanilla Cycle)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UpgradeDiscountsandDuration_v2.0.zip"
     }
    ]
   },
   {
    "id": "blackmarket",
    "name": "Blackmarket Discounts",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-blackmarket-discounts-mod-v2-0",
    "desc": "Descontos no mercado negro.",
    "type": "pak",
    "options": [
     {
      "label": "25% (Big Cheat)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip",
+     "url": "/mods/SWZC_BlackmarketDiscounts_v2.0.zip",
      "size": 197324,
-     "sub": "Blackmarket Discounts/25% (Big Cheat)"
+     "sub": "Blackmarket Discounts/25% (Big Cheat)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip"
     },
     {
      "label": "50% (Med Cheat)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip",
+     "url": "/mods/SWZC_BlackmarketDiscounts_v2.0.zip",
      "size": 197324,
-     "sub": "Blackmarket Discounts/50% (Med Cheat)"
+     "sub": "Blackmarket Discounts/50% (Med Cheat)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip"
     },
     {
      "label": "75% (Smol Cheat)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip",
+     "url": "/mods/SWZC_BlackmarketDiscounts_v2.0.zip",
      "size": 197324,
-     "sub": "Blackmarket Discounts/75% (Smol Cheat)"
+     "sub": "Blackmarket Discounts/75% (Smol Cheat)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip"
     },
     {
      "label": "Free (Mega Cheat)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip",
+     "url": "/mods/SWZC_BlackmarketDiscounts_v2.0.zip",
      "size": 197324,
-     "sub": "Blackmarket Discounts/Free (Mega Cheat)"
+     "sub": "Blackmarket Discounts/Free (Mega Cheat)",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_BlackmarketDiscounts_v2.0.zip"
     }
    ]
   },
   {
    "id": "operations",
    "name": "Operations Tweaks",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-operations-tweaks-mod-v5-0",
    "desc": "Operações: mais tempo e/ou menos recursos.",
    "type": "pak",
    "options": [
     {
      "label": "More Time & Resource Changes / 2x Expiration / 2x Expiration - 50% Credits",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Credits"
+     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Credits",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / 2x Expiration / 2x Expiration - 50% Credits & Intel",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Credits & Intel"
+     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Credits & Intel",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / 2x Expiration / 2x Expiration - 50% Intel",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Intel"
+     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - 50% Intel",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / 2x Expiration / 2x Expiration - Free",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - Free"
+     "sub": "Operations Tweaks/More Time & Resource Changes/2x Expiration/2x Expiration - Free",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / Never Expire / Never Expire - 50% Credits",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Credits"
+     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Credits",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / Never Expire / Never Expire - 50% Credits & Intel",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Credits & Intel"
+     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Credits & Intel",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / Never Expire / Never Expire - 50% Intel",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Intel"
+     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - 50% Intel",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time & Resource Changes / Never Expire / Never Expire - Free",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - Free"
+     "sub": "Operations Tweaks/More Time & Resource Changes/Never Expire/Never Expire - Free",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time Only / 2x Expiration",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time Only/2x Expiration"
+     "sub": "Operations Tweaks/More Time Only/2x Expiration",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "More Time Only / Never Expire",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/More Time Only/Never Expire"
+     "sub": "Operations Tweaks/More Time Only/Never Expire",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "Resource Changes Only / Credits Only Halved",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/Resource Changes Only/Credits Only Halved"
+     "sub": "Operations Tweaks/Resource Changes Only/Credits Only Halved",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "Resource Changes Only / Free Operations",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/Resource Changes Only/Free Operations"
+     "sub": "Operations Tweaks/Resource Changes Only/Free Operations",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "Resource Changes Only / Intel Only Halved",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/Resource Changes Only/Intel Only Halved"
+     "sub": "Operations Tweaks/Resource Changes Only/Intel Only Halved",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     },
     {
      "label": "Resource Changes Only / Intel and Credits Halved",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip",
+     "url": "/mods/SWZC_OperationsTweaks_v5.0.zip",
      "size": 2542082,
-     "sub": "Operations Tweaks/Resource Changes Only/Intel and Credits Halved"
+     "sub": "Operations Tweaks/Resource Changes Only/Intel and Credits Halved",
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_OperationsTweaks_v5.0.zip"
     }
    ]
   },
   {
    "id": "engine-tweaks",
    "name": "Ultimate Engine Tweaks (Anti-Stutter)",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-ultimate-engine-tweaks-anti-stutters-more-performance-lower-latency-better-clarity-lossless-mod-v1-0",
    "desc": "Engine.ini otimizado (vai para %LOCALAPPDATA%\\SWZeroCompany\\Saved\\Config\\Windows).",
    "type": "ini",
    "options": [
     {
      "label": "Sem VRR",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UltimateUnrealEngine.ini_NoVRR_v1.0.zip",
-     "size": 7895
+     "url": "/mods/SWZC_UltimateUnrealEngine.ini_NoVRR_v1.0.zip",
+     "size": 7895,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UltimateUnrealEngine.ini_NoVRR_v1.0.zip"
     },
     {
      "label": "Com VRR (G-Sync/FreeSync)",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UltimateUnrealEngine.ini_VRR_v1.0.zip",
-     "size": 7994
+     "url": "/mods/SWZC_UltimateUnrealEngine.ini_VRR_v1.0.zip",
+     "size": 7994,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/SWZC_UltimateUnrealEngine.ini_VRR_v1.0.zip"
     }
    ]
   },
   {
    "id": "full-customization",
    "name": "Full Customization (Mandalorian, Padawan & More)",
-   "page_url": "https://megagames.com/mods/star-wars-zero-company-full-customization-mod-mandalorian-padawan-and-more-mod-v1-3",
    "desc": "Personalização completa de recrutas.",
    "type": "lua",
    "options": [
     {
      "label": "Padrão",
-     "url": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/STZC_FullCustomizationUnlocked_v1.3.zip",
-     "size": 98024
+     "url": "/mods/STZC_FullCustomizationUnlocked_v1.3.zip",
+     "size": 98024,
+     "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/STZC_FullCustomizationUnlocked_v1.3.zip"
     }
    ]
   }

@@ -186,13 +186,15 @@ body{padding:0 0 40px}
     </div>
   </div>
 
-  <!-- Gestor de Mods Nexus -->
+  <!-- Gestor de Mods -->
   <div class="card" id="nexus-card">
     <div class="card-hd" onclick="toggleCard('nexus-card')">
-      🎮 GESTOR DE MODS (NEXUS)
+      🎮 MODS
       <span class="toggle">▼</span>
     </div>
     <div class="card-bd">
+      <div class="nx-info">Instala e desinstala mods com 1 clique no portal: <a href="https://swmp-six.vercel.app/" target="_blank" rel="noopener" style="color:var(--blue)">swmp-six.vercel.app</a></div>
+      <div style="display:none">
       <div class="nx-info">
         Navega os top 30 mods mais endorsados. <b style="color:var(--gold)">API key gratuita obrigatória</b> —
         obtém em <a href="https://www.nexusmods.com/users/myaccount?tab=api+access" target="_blank"
@@ -219,6 +221,7 @@ body{padding:0 0 40px}
 
       <div class="nx-grid" id="nx-grid"></div>
 
+      </div>
       <!-- Drop zone para instalar manualmente -->
       <div class="nx-drop" id="nx-drop">
         📂 Ou arrasta um ficheiro .zip/.pak aqui para instalar diretamente
