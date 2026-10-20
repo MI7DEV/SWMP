@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.8
+-- ZeroCompanyMP/main.lua — v0.9
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -444,7 +444,7 @@ ExecuteWithDelay(3000, function()
 end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.8 carregado")
+print(" ZeroCompanyMP v0.9 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -613,6 +613,45 @@ local pvp_on     = false
 local pvp_cmd_ts = 0
 local pvp_flags  = {}   -- CDOs de TeamGameFlag alterados (para repor)
 
+-- Só com a cópia original da Steam: manifesto da app na biblioteca Steam e nenhum ficheiro de crack/emulador
+-- (o SWMP-Host ainda verifica a assinatura Valve da steam_api64.dll e o registo da Steam)
+local CRACK_MARKERS = { "steam_emu.ini", "steam_appid.txt", "steam_interfaces.txt", "steam_api64_o.dll", "steam_api64.cdx",
+    "CODEX.ini", "CPY.ini", "3DMGAME.ini", "ali213.ini", "valve.ini", "SmartSteamEmu.ini", "ColdClientLoader.ini",
+    "OnlineFix.ini", "OnlineFix64.dll", "cream_api.ini", "steam_settings\\steam_appid.txt", "steam_settings\\configs.user.ini" }
+local genuine_ok, genuine_why = nil, ""
+
+local function check_genuine()
+    if genuine_ok ~= nil then return genuine_ok end
+    -- MOD_PATH = <jogo>\SWZeroCompany\Binaries\Win64\ue4ss\Mods\ZeroCompanyMP\Scripts
+    local win64 = MOD_PATH:match("^(.+)[/\\]ue4ss[/\\]Mods[/\\]") or ""
+    local root, installdir = win64:match("^(.+[/\\]([^/\\]+))[/\\]SWZeroCompany[/\\]Binaries[/\\]Win64$")
+    local why = {}
+    if not root then
+        why[#why + 1] = "pasta do jogo não reconhecida"
+    else
+        local steamapps = root:match("^(.+)[/\\]common[/\\][^/\\]+$")
+        local acf = steamapps and read_file(steamapps .. "\\appmanifest_2075800.acf")
+        if not acf then
+            why[#why + 1] = "sem manifesto da Steam (appmanifest_2075800.acf)"
+        else
+            local dir = acf:match('"installdir"%s+"([^"]+)"')
+            if not dir or dir:lower() ~= installdir:lower() then why[#why + 1] = "manifesto da Steam não corresponde à pasta do jogo" end
+            if not acf:match('"LastOwner"%s+"7656119%d+"') then why[#why + 1] = "manifesto sem conta Steam dona do jogo" end
+        end
+        local dirs = { root, win64, root .. "\\Engine\\Binaries\\ThirdParty\\Steamworks\\Steamv157\\Win64" }
+        for _, d in ipairs(dirs) do
+            for _, m in ipairs(CRACK_MARKERS) do
+                local f = io.open(d .. "\\" .. m, "rb")
+                if f then f:close(); why[#why + 1] = "ficheiro de crack/emulador: " .. m end
+            end
+        end
+    end
+    genuine_ok = #why == 0
+    genuine_why = table.concat(why, "; ")
+    print("[ZeroCompanyMP] Jogo original (Steam): " .. (genuine_ok and "OK" or ("NÃO — " .. genuine_why)))
+    return genuine_ok
+end
+
 local function pvp_pc()
     local pcs = FindAllOf("PlayerController")
     if pcs then for _, p in ipairs(pcs) do if valid(p) then return p end end end
@@ -676,8 +715,9 @@ local function pvp_report()
     out.units = n
     local parts = {}
     for _, t in ipairs(out.teams) do parts[#parts + 1] = ('{"group":"%s","flag":"%s"}'):format(t.group, t.flag) end
-    write_file(PVP_STATE, ('{"active":%s,"round":%d,"current":"%s","units":%d,"teams":[%s],"ts":%d}'):format(
-        tostring(pvp_on), out.round or 0, out.current or "", n, table.concat(parts, ","), out.ts))
+    check_genuine()
+    write_file(PVP_STATE, ('{"active":%s,"round":%d,"current":"%s","units":%d,"teams":[%s],"genuine":%s,"why":%s,"ts":%d}'):format(
+        tostring(pvp_on), out.round or 0, out.current or "", n, table.concat(parts, ","), tostring(genuine_ok), json.encode(genuine_why), out.ts))
     return out
 end
 
@@ -710,6 +750,12 @@ local function pvp_flag_control(want)
 end
 
 local function pvp_set(on)
+    if on and not check_genuine() then
+        print("[ZeroCompanyMP] Batalha 1x1 recusada — jogo não verificado como original: " .. genuine_why)
+        pvp_on = false
+        pcall(pvp_report)
+        return
+    end
     pvp_on = on
     local cm = pvp_cheat()
     if cm then

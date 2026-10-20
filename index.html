@@ -2081,7 +2081,8 @@ async function _pvpPoll(){
     var st=document.getElementById('pvp-state');
     st.textContent=d.active&&fresh?'LIGADA':'desligada';
     st.style.color=d.active&&fresh?'#4ade80':'';
-    if(d.active&&fresh) document.getElementById('pvp-info').textContent='Ronda '+(d.round||'—')+' · vez de: '+(d.current||'—')+' · '+(d.units||0)+' unidades em campo';
+    if(d.genuine===false&&fresh) document.getElementById('pvp-info').textContent='✗ Bloqueado — só com o jogo original da Steam: '+(d.why||'verificação falhou');
+    else if(d.active&&fresh) document.getElementById('pvp-info').textContent='Ronda '+(d.round||'—')+' · vez de: '+(d.current||'—')+' · '+(d.units||0)+' unidades em campo';
   }catch(e){}
 }
 document.getElementById('pvp-on').addEventListener('click',function(){_pvpCmd('on');});

@@ -734,6 +734,8 @@ function connect(){
         if(msg.local_ip&&msg.local_ip!=='127.0.0.1') updateShareUrl(msg.local_ip);
         if(msg.my_mods) myMods=msg.my_mods;
         if(msg.char_split && msg.char_split.host) showCharSplit(msg.char_split);
+        if(msg.genuine) log(msg.genuine.ok?'✓ Jogo original da Steam verificado.'
+          :'✗ Jogo não verificado como original — co-op bloqueado: '+(msg.genuine.reasons||[]).join('; '),msg.genuine.ok?'green':'red');
         if(msg.install_status==='running'||msg.install_status==='pending'){
           document.getElementById('install-banner').style.display='';
         }

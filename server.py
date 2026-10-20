@@ -167,6 +167,65 @@ def is_game_running() -> bool:
     except Exception:
         return False
 
+# ─── Jogo original (Steam) ────────────────────────────────────────────────────
+# Só se joga com a cópia original da Steam: manifesto da Steam para a app, steam_api64.dll assinada
+# pela Valve, registo da Steam com o jogo instalado e nenhum ficheiro de emulador/crack ao lado.
+STEAM_APPID = "2075800"
+CRACK_MARKERS = (
+    "steam_emu.ini", "steam_appid.txt", "steam_interfaces.txt", "steam_api64_o.dll", "steam_api64.cdx",
+    "CODEX.ini", "CPY.ini", "3DMGAME.ini", "ali213.ini", "valve.ini", "SmartSteamEmu.ini",
+    "ColdClientLoader.ini", "OnlineFix.ini", "OnlineFix64.dll", "cream_api.ini", "steam_settings",
+)
+_genuine: dict = {"ok": False, "reasons": ["verificação ainda não feita"]}
+
+def check_genuine() -> dict:
+    reasons = []
+    if not GAME_ROOT:
+        return {"ok": False, "reasons": ["jogo não encontrado"]}
+    steamapps = GAME_ROOT.parent.parent
+    acf = steamapps / f"appmanifest_{STEAM_APPID}.acf"
+    try:
+        txt = acf.read_text(encoding="utf-8", errors="replace")
+        installdir = re.search(r'"installdir"\s+"([^"]+)"', txt)
+        flags = re.search(r'"StateFlags"\s+"(\d+)"', txt)
+        owner = re.search(r'"LastOwner"\s+"(\d+)"', txt)
+        if not installdir or installdir.group(1).lower() != GAME_ROOT.name.lower():
+            reasons.append("manifesto da Steam não corresponde à pasta do jogo")
+        if not flags or not int(flags.group(1)) & 4:
+            reasons.append("a Steam não dá o jogo como instalado")
+        if not owner or not re.fullmatch(r"7656119\d{10}", owner.group(1)):
+            reasons.append("manifesto sem conta Steam dona do jogo")
+    except OSError:
+        reasons.append(f"sem manifesto da Steam ({acf.name})")
+    dirs = [GAME_ROOT, WIN64] + [p.parent for p in GAME_ROOT.glob("Engine/Binaries/ThirdParty/Steamworks/*/Win64/steam_api64.dll")]
+    found = sorted({m for d in dirs if d for m in CRACK_MARKERS if (d / m).exists()})
+    if found:
+        reasons.append("ficheiros de crack/emulador: " + ", ".join(found))
+    apis = list(GAME_ROOT.glob("Engine/Binaries/ThirdParty/Steamworks/*/Win64/steam_api64.dll"))
+    if not apis:
+        reasons.append("steam_api64.dll em falta")
+    for api in apis:
+        try:
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                 "$s=Get-AuthenticodeSignature -LiteralPath $env:SWMP_DLL; \"$($s.Status)|$($s.SignerCertificate.Subject)\""],
+                env={**os.environ, "SWMP_DLL": str(api)},
+                encoding="utf-8", errors="replace", timeout=30, creationflags=subprocess.CREATE_NO_WINDOW,
+            ).strip()
+            status, _, subject = out.partition("|")
+            if status != "Valid" or "O=Valve Corp." not in subject:
+                reasons.append(f"steam_api64.dll não é a original da Valve ({status or 'sem assinatura'})")
+        except Exception as e:
+            reasons.append(f"não foi possível verificar a assinatura da steam_api64.dll ({e})")
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, rf"Software\Valve\Steam\Apps\{STEAM_APPID}") as k:
+            if winreg.QueryValueEx(k, "Installed")[0] != 1:
+                reasons.append("a Steam deste PC não tem o jogo instalado")
+    except OSError:
+        reasons.append("a Steam deste PC não conhece o jogo")
+    return {"ok": not reasons, "reasons": reasons}
+
 def list_mods() -> list:
     if not MODS_DIR or not MODS_DIR.exists():
         return []
@@ -651,6 +710,12 @@ async def ws_handler(ws):
                 await existing.close()
             except Exception:
                 pass
+        # O amigo joga no jogo do anfitrião (Remote Play): só com a cópia original da Steam
+        if req_role == "client" and not _genuine.get("ok"):
+            await ws.send(json.dumps({"type":"ERROR","msg":"o anfitrião não está com o jogo original da Steam: "
+                                      + "; ".join(_genuine.get("reasons", []))}))
+            conn_log_add("[CONVIDADO] recusado — jogo do anfitrião não verificado como original", "red")
+            return
         # All checks passed — commit to this role
         role = req_role
         _clients[role] = ws
@@ -666,6 +731,7 @@ async def ws_handler(ws):
             "friend":other in _clients,"install_status":_install_status,
             "my_mods":list_mods(),"char_split":_char_split,
             "tailscale_ip":_tailscale_ip,"turn_state":_turn_state,
+            "genuine":_genuine,
         }))
         if role == "host":
             for lm,lc in _install_log:
@@ -680,7 +746,10 @@ async def ws_handler(ws):
             t = msg.get("type","")
 
             if t == "EXPLORER_START" and role == "host":
-                if CMD_FILE:
+                if not _genuine.get("ok"):
+                    await ws.send(json.dumps({"type":"LOG","c":"red","msg":"✗ Co-op bloqueado — jogo não verificado como original: "
+                                              + "; ".join(_genuine.get("reasons", []))}))
+                elif CMD_FILE:
                     CMD_FILE.parent.mkdir(parents=True, exist_ok=True)
                     CMD_FILE.write_text(json.dumps({"cmd":"explore","ts":time.time()}))
                     await ws.send(json.dumps({"type":"LOG","c":"blue","msg":"Comando enviado ao jogo..."}))
@@ -875,6 +944,7 @@ class _HTTP(BaseHTTPRequestHandler):
                 "ws_clients":list(_clients.keys()),
                 "turn_state":_turn_state,
                 "tunnel_url": _tunnel_url,
+                "genuine": _genuine,
             }
             # Expose tokens only when:
             # - request is from loopback (from_local)
@@ -1389,7 +1459,7 @@ async def _install_from_url(url: str, mod_name: str):
 
 
 async def main():
-    global _loop
+    global _loop, _genuine
     _loop = asyncio.get_running_loop()
     detect_local_ip()
     threading.Thread(target=_run_http, daemon=True).start()
@@ -1402,6 +1472,9 @@ async def main():
 
     # Pre-descobrir o game ID do Nexus em background
     threading.Thread(target=_nx_find_game, daemon=True).start()
+
+    _genuine = await asyncio.to_thread(check_genuine)
+    print("  Jogo original (Steam): " + ("OK" if _genuine["ok"] else "NÃO — " + "; ".join(_genuine["reasons"])))
 
     async with websockets.serve(ws_handler, "0.0.0.0", RELAY_PORT):
         asyncio.create_task(auto_install())
