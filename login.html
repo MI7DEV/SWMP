@@ -31,8 +31,9 @@ button:disabled{opacity:.6;cursor:wait}
   <div id="err"></div>
 </form>
 <script>
-var next=new URLSearchParams(location.search).get('next')||'/';
-if(!/^\/(?!\/)/.test(next)) next='/';
+// só volta para páginas deste mesmo site
+var next='/';
+try{ var u=new URL(new URLSearchParams(location.search).get('next')||'/',location.origin); if(u.origin===location.origin) next=u.pathname+u.search+u.hash; }catch(e){}
 document.getElementById('f').addEventListener('submit',async function(ev){
   ev.preventDefault();
   var b=document.getElementById('b'), err=document.getElementById('err');
