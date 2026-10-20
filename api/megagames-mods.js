@@ -10,7 +10,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 SWMP/1.
 async function fetchText(url) {
   const r = await fetch(url, {
     headers: { "User-Agent": UA, Accept: "text/html" },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(8000),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
   return r.text();
@@ -57,15 +57,21 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Get listing page
-    const listHtml = await fetchText(LISTING_URL);
-
-    // 2. Extract mod page slugs
-    const slugRe = /href="https:\/\/megagames\.com\/mods\/(star-wars-zero-company[^"]+)"/gi;
+    // 1. Get listing page (and any subsequent pages)
     const slugs = new Set();
-    let m;
-    while ((m = slugRe.exec(listHtml)) !== null) {
-      slugs.add(m[1]);
+    const slugRe = /href="https:\/\/megagames\.com\/mods\/(star-wars-zero-company[^"]+)"/gi;
+    const pageUrls = [LISTING_URL];
+    // Check for pagination links too
+    for (const pageUrl of pageUrls) {
+      let listHtml;
+      try { listHtml = await fetchText(pageUrl); } catch { continue; }
+      let m;
+      while ((m = slugRe.exec(listHtml)) !== null) { slugs.add(m[1]); }
+      slugRe.lastIndex = 0;
+      // Find next page link
+      const nextRe = /href="(https:\/\/megagames\.com\/games\/star-wars-zero-company\/mod\/page\/\d+[^"]*)"/i;
+      const nextM = listHtml.match(nextRe);
+      if (nextM && !pageUrls.includes(nextM[1])) pageUrls.push(nextM[1]);
     }
 
     if (!slugs.size) {
