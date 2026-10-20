@@ -1673,6 +1673,27 @@ async function _musInstallPack(btn){
   if(_mus.on&&_musTarget().key!==_mus.playingKey) _musNext();
 }
 
+
+// Ouvir uma música antes de a usar (baixa a trilha enquanto ouves; clica de novo para parar)
+var _musPrevEl=new Audio(), _musPrevUrl=null;
+_musPrevEl.onended=function(){ _musPreviewStop(); };
+function _musPreviewStop(){
+  _musPrevEl.pause();
+  if(_musPrevUrl){ URL.revokeObjectURL(_musPrevUrl); _musPrevUrl=null; }
+  if(_mus.prevId){ _mus.prevId=null; var el=_mus.els[_mus.cur]; if(_mus.on&&!el.paused&&!el._fade) _musFade(el,_mus.vol,600); _musRender(); }
+}
+async function _musPreview(id){
+  if(_mus.prevId===id){ _musPreviewStop(); return; }
+  _musPreviewStop();
+  var t=await _idbGet('mus:t:'+id); if(!t) return;
+  _musPrevUrl=URL.createObjectURL(t.blob);
+  _musPrevEl.src=_musPrevUrl; _musPrevEl.volume=Math.max(_mus.vol,0.5);
+  _mus.prevId=id;
+  var el=_mus.els[_mus.cur]; if(_mus.on&&!el.paused) _musFade(el,_mus.vol*0.15,600);
+  try{ await _musPrevEl.play(); }catch(e){ _mus.prevId=null; }
+  _musRender();
+}
+
 function _musSlotCount(g){ var n=0; g.tracks.forEach(function(t){ if((_mus.map[t[0]]||[]).length) n++; }); return n; }
 
 function _musRow(key,label,sub){
@@ -1690,6 +1711,11 @@ function _musRow(key,label,sub){
   ids.forEach(function(id){
     var c=document.createElement('span');
     c.style.cssText='font-size:11px;background:rgba(255,255,255,.08);border-radius:10px;padding:2px 4px 2px 8px;display:inline-flex;align-items:center;gap:2px;max-width:100%;'+(_mus.playing===id?'color:var(--gold)':'color:var(--fg)');
+    var pv=document.createElement('button'); var on=_mus.prevId===id;
+    pv.textContent=on?'■':'▶'; pv.title=on?'Parar':'Ouvir esta música';
+    pv.style.cssText='background:none;border:none;cursor:pointer;font-size:11px;padding:0 4px;color:'+(on?'var(--gold)':'var(--fg2)');
+    pv.addEventListener('click',function(){_musPreview(id);});
+    c.appendChild(pv);
     var n=document.createElement('span'); n.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
     n.textContent='♪ '+_mus.names[id];
     var x=document.createElement('button'); x.textContent='×'; x.title='Remover';
