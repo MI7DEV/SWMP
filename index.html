@@ -996,36 +996,80 @@ document.querySelectorAll('[data-sort]').forEach(function(btn){
 document.getElementById('limit-select').addEventListener('change',renderGrid);
 
 var _installing=new Set();
+var _uninstalling=new Set();
+
+function _pollInstall(modId,name,btn){
+  var tries=0;
+  var poll=setInterval(function(){
+    tries++;
+    if(installedMods.has(name.toLowerCase())){
+      clearInterval(poll);_installing.delete(modId);renderGrid();return;
+    }
+    if(tries>60){clearInterval(poll);_installing.delete(modId);renderGrid();}
+  },3000);
+}
 
 function installMod(modId,name,btn){
   if(_installing.has(modId)) return;
   _installing.add(modId);
-  btn.textContent='INSTALANDO...';btn.disabled=true;btn.style.opacity='0.7';
-  fetch(LOCAL+'/api/nexus/install-start',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-    body:JSON.stringify({id:String(modId),name:name}),
-    signal:AbortSignal.timeout(5000)})
+  btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
+  // Ask Vercel for CDN URL (uses server-side NX_KEY — key never reaches browser)
+  fetch('/api/nexus-cdn?mod_id='+modId,{signal:AbortSignal.timeout(10000)})
     .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.status==='started'){
-        btn.textContent='A INSTALAR...';
-        var tries=0;
-        var poll=setInterval(function(){
-          tries++;
-          if(installedMods.has(name.toLowerCase())){
-            clearInterval(poll);_installing.delete(modId);renderGrid();
-          }
-          if(tries>60){clearInterval(poll);_installing.delete(modId);renderGrid();}
-        },3000);
-      } else {
-        btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
-        _installing.delete(modId);
+    .then(function(cdn){
+      if(cdn.need_premium){
+        // Free account: fall back to local server opening browser + watching Downloads
+        btn.textContent='A abrir Nexus...';
+        return fetch(LOCAL+'/api/nexus/install-start',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+          body:JSON.stringify({id:String(modId),name:name}),
+          signal:AbortSignal.timeout(5000)})
+          .then(function(r){return r.json();})
+          .then(function(d){
+            if(d.status==='started'){btn.textContent='A aguardar download...';_pollInstall(modId,name,btn);}
+            else{btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';_installing.delete(modId);}
+          });
       }
+      // Premium: download via CDN URL, local server installs
+      btn.textContent='A instalar...';
+      return fetch(LOCAL+'/api/install-url',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+        body:JSON.stringify({url:cdn.url,name:name}),
+        signal:AbortSignal.timeout(10000)})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.status==='started'){_pollInstall(modId,name,btn);}
+          else{btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';_installing.delete(modId);}
+        });
     })
     .catch(function(){
       btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
       _installing.delete(modId);
+    });
+}
+
+function uninstallMod(name,btn){
+  if(_uninstalling.has(name)) return;
+  _uninstalling.add(name);
+  btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';
+  fetch(LOCAL+'/api/nexus/uninstall?name='+encodeURIComponent(name),{
+    signal:AbortSignal.timeout(8000)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.status==='ok'||d.removed){
+        installedMods.delete(name.toLowerCase());
+        _uninstalling.delete(name);
+        renderGrid();
+      } else {
+        btn.textContent='DESINSTALAR';btn.disabled=false;btn.style.opacity='';
+        _uninstalling.delete(name);
+      }
+    })
+    .catch(function(){
+      btn.textContent='DESINSTALAR';btn.disabled=false;btn.style.opacity='';
+      _uninstalling.delete(name);
     });
 }
 
@@ -1087,26 +1131,31 @@ function renderGrid(){
         '<div class="mod-desc"></div>'+
       '</div>'+
       '<div class="mod-footer">'+
-        (_isHost ? '<button class="install-btn'+(inst?' installed':'')+'"'+(inst?' disabled':'')+'>'+(inst?'✓ INSTALADO':'INSTALAR')+'</button>' : '')+
-        '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">'+(inst?'✓ Instalado':'Ver no Nexus →')+'</a>'+
+        (_isHost ? '<button class="install-btn'+(inst?' installed':'')+'">'+
+          (inst?'↩ DESINSTALAR':'INSTALAR')+'</button>' : '')+
+        '<a class="nexus-link" href="'+nexusUrl+'" target="_blank" rel="noopener">Ver no Nexus →</a>'+
       '</div>';
 
     card.querySelector('.mod-name').textContent=m.name;
     card.querySelector('.mod-desc').textContent=desc;
     card.querySelector('.mod-ver').textContent='v'+(m.version||'?');
-    // Restore img src safely (bypasses innerHTML injection risk)
     var imgEl=card.querySelector('img[data-src]');
     if(imgEl){ imgEl.src=imgEl.dataset.src; imgEl.removeAttribute('data-src'); }
 
-    if(!inst && _isHost){
+    if(_isHost){
       var btn=card.querySelector('.install-btn');
       if(btn){
-        if(_installing.has(m.mod_id)){
-          btn.textContent='A INSTALAR...';btn.disabled=true;btn.style.opacity='0.7';
+        if(inst){
+          if(_uninstalling.has(m.name)){btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';}
+          (function(modName,b){
+            b.addEventListener('click',function(){ uninstallMod(modName,b); });
+          })(m.name,btn);
+        } else {
+          if(_installing.has(m.mod_id)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
+          (function(modId,modName,b){
+            b.addEventListener('click',function(){ installMod(modId,modName,b); });
+          })(m.mod_id,m.name,btn);
         }
-        (function(modId,modName,b){
-          b.addEventListener('click',function(){ installMod(modId,modName,b); });
-        })(m.mod_id,m.name,btn);
       }
     }
     grid.appendChild(card);

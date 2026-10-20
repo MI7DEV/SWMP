@@ -968,9 +968,17 @@ class _HTTP(BaseHTTPRequestHandler):
     }
     _SAFE_HOSTS = {f"localhost:{HTTP_PORT}", f"127.0.0.1:{HTTP_PORT}"}
 
+    def _is_trusted_origin(self, origin: str) -> bool:
+        if not origin:
+            return True
+        if origin in self._SAFE_ORIGINS:
+            return True
+        # Accept any *.vercel.app origin from loopback (the real guard is from_local)
+        from_local = self.client_address[0] in ("127.0.0.1", "::1")
+        return from_local and origin.startswith("https://") and origin.endswith(".vercel.app")
+
     def _origin_ok(self) -> bool:
-        origin = self.headers.get("Origin", "")
-        return not origin or origin in self._SAFE_ORIGINS
+        return self._is_trusted_origin(self.headers.get("Origin", ""))
 
     def _host_ok(self) -> bool:
         host = self.headers.get("Host", "")
@@ -978,7 +986,7 @@ class _HTTP(BaseHTTPRequestHandler):
 
     def _acao(self):
         origin = self.headers.get("Origin", "")
-        return origin if origin in self._SAFE_ORIGINS else ""
+        return origin if self._is_trusted_origin(origin) else ""
 
     def _reply(self, code, ctype, body, acao: str = "*"):
         self.send_response(code)
@@ -990,7 +998,7 @@ class _HTTP(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         origin = self.headers.get("Origin", "")
-        if origin not in self._SAFE_ORIGINS:
+        if not self._is_trusted_origin(origin):
             self.send_response(403); self.end_headers(); return
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", origin)
@@ -1028,9 +1036,8 @@ class _HTTP(BaseHTTPRequestHandler):
             # Browsers never send X-Requested-With automatically (forms, img, etc.)
             if self.headers.get("X-Requested-With","") != "XMLHttpRequest":
                 return self._reply(403, "application/json", b'{"error":"missing header"}', acao)
-            # Origin, if present, must be in allowlist (blocks DNS rebinding)
-            origin = self.headers.get("Origin","")
-            if origin and origin not in self._SAFE_ORIGINS:
+            # Origin, if present, must be trusted (blocks DNS rebinding)
+            if not self._is_trusted_origin(self.headers.get("Origin","")):
                 return self._reply(403, "application/json", b'{"error":"bad origin"}', acao)
             if not self._host_ok():
                 return self._reply(421, "application/json", b'{"error":"bad host"}', acao)
@@ -1044,6 +1051,25 @@ class _HTTP(BaseHTTPRequestHandler):
                 return self._reply(400, "application/json", b'{"error":"bad name"}', acao)
             if _loop is not None:
                 asyncio.run_coroutine_threadsafe(_nx_install_http(mod_id, mod_name), _loop)
+                return self._reply(200, "application/json", b'{"status":"started"}', acao)
+            return self._reply(503, "application/json", b'{"error":"loop not ready"}', acao)
+
+        if path == "/api/install-url":
+            if not from_local:
+                return self._reply(403, "application/json", b'{"error":"forbidden"}', acao)
+            if self.headers.get("X-Requested-With","") != "XMLHttpRequest":
+                return self._reply(403, "application/json", b'{"error":"missing header"}', acao)
+            if not self._is_trusted_origin(self.headers.get("Origin","")):
+                return self._reply(403, "application/json", b'{"error":"bad origin"}', acao)
+            if not self._host_ok():
+                return self._reply(421, "application/json", b'{"error":"bad host"}', acao)
+            dl_url = params.get("url", "").strip()
+            raw_name = params.get("name", "Mod")[:100]
+            mod_name = re.sub(r'[^A-Za-z0-9 _.\-]', '_', raw_name).strip('.')
+            if not dl_url or not dl_url.startswith("https://") or not mod_name:
+                return self._reply(400, "application/json", b'{"error":"bad params"}', acao)
+            if _loop is not None:
+                asyncio.run_coroutine_threadsafe(_install_from_url(dl_url, mod_name), _loop)
                 return self._reply(200, "application/json", b'{"status":"started"}', acao)
             return self._reply(503, "application/json", b'{"error":"loop not ready"}', acao)
 
@@ -1138,6 +1164,25 @@ async def _nx_install_http(mod_id: int, mod_name: str):
         except Exception as e:
             await _ilog(f"Não foi possível listar ficheiros: {e}", "red")
     await _nx_install_ws(_MockWS(), mod_id, mod_name, api_key, file_id)
+
+
+async def _install_from_url(url: str, mod_name: str):
+    """Download mod from a direct CDN URL and install it (no Nexus auth needed)."""
+    global _install_status
+    _install_status = "running"
+    await _ilog(f"A baixar '{mod_name}'...", "blue")
+    try:
+        req = urllib.request.Request(url, headers=_NX_HDRS)
+        data = await asyncio.to_thread(
+            lambda: urllib.request.urlopen(req, timeout=300).read())
+        installed_name = await asyncio.to_thread(_install_from_bytes, data, mod_name)
+        _install_status = "done"
+        await _ilog(f"✓ '{mod_name}' instalado!", "green")
+        await broadcast({"type": "NEXUS_INSTALLED", "mod_name": installed_name,
+                         "orig_name": mod_name}, only="host")
+    except Exception as e:
+        _install_status = "failed"
+        await _ilog(f"✗ Erro ao instalar '{mod_name}': {e}", "red")
 
 
 async def main():
