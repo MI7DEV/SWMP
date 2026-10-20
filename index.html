@@ -1125,7 +1125,9 @@ async function _removePath(root,path){
     var segs=_splitPath(path);
     var dir=await _dirAt(root,segs.slice(0,-1).join('/'),false);
     await dir.removeEntry(segs[segs.length-1],{recursive:true});
-  }catch(e){}
+  }catch(e){
+    if(e.name!=='NotFoundError') throw e;   // ficheiro em uso (jogo aberto) não pode passar em silêncio
+  }
 }
 
 // mods.txt do UE4SS: ativa/desativa uma entrada mantendo "Keybinds" no fim
@@ -1172,22 +1174,36 @@ async function _installZipData(data,root,opt,fallbackName){
     man.kind='loader';
     return man;
   }
-  // 2. Ficheiros PAK
-  var paks=entries.filter(function(e){return /\.(pak|ucas|utoc)$/i.test(e.path);});
-  if(opt&&opt.sub) paks=paks.filter(function(e){return e.path.slice(0,e.path.lastIndexOf('/'))===opt.sub;});
-  if(paks.length){
-    var seen={};
-    for(var j=0;j<paks.length;j++){
-      var base=paks[j].path.split('/').pop();
-      if(seen[base]) continue; seen[base]=1;
-      await put(PAK_MODS+'/'+base,paks[j]);
+  // 1b. ZIP já com o layout da pasta do jogo (SWZeroCompany/Binaries/…, Content/Paks/…, Mods/<Plugin>/…)
+  var rel0=entries.map(function(e){return e.path.replace(/^SWZeroCompany\//i,'');});
+  if(rel0.some(function(p){return /^(binaries\/win64\/|content\/paks\/)/i.test(p);})){
+    var owned={}, luaMods={};
+    rel0.forEach(function(p){
+      var m;
+      if((m=p.match(/^(binaries\/win64\/ue4ss\/mods\/[^\/]+)\//i))){ owned[m[1]]='dir'; luaMods[m[1].split('/').pop().toLowerCase()]=1; }
+      else if((m=p.match(/^(content\/paks\/~mods\/[^\/]+)\//i))) owned[m[1]]='dir';
+      else if((m=p.match(/^(mods\/[^\/]+)\//i))) owned[m[1]]='dir';
+    });
+    if(Object.keys(luaMods).length&&!await _ue4ssInstalled(root)) throw new Error('NEED_UE4SS');
+    for(var g=0;g<entries.length;g++){
+      var gp=rel0[g];
+      if(!/^(binaries|content|mods)\//i.test(gp)) continue;
+      var underDir=Object.keys(owned).some(function(d){return gp.toLowerCase().indexOf(d.toLowerCase()+'/')===0;});
+      await _writeFile(root,gp,await entries[g].file.async('arraybuffer'));
+      if(!underDir) man.files.push(gp);
     }
-    man.kind='pak';
+    man.dirs=Object.keys(owned).map(function(d){return rel0.find(function(p){return p.toLowerCase().indexOf(d.toLowerCase()+'/')===0;}).slice(0,d.length);});
+    for(var lm in luaMods){
+      var orig=man.dirs.find(function(d){return d.toLowerCase()==='binaries/win64/ue4ss/mods/'+lm;}).split('/').pop();
+      await _modsTxt(root,orig,true); man.modsTxt.push(orig);
+    }
+    man.kind='game';
     return man;
   }
-  // 3. Engine.ini
+  // 2. Engine.ini (mod de configuração)
+  var isPak=function(p){return /\.(pak|ucas|utoc)$/i.test(p);};
   var ini=entries.find(function(e){return /(^|\/)engine\.ini$/i.test(e.path);});
-  if(ini){
+  if(ini&&!entries.some(function(e){return isPak(e.path);})){
     var cfg=await _getCfgDir();
     if(!cfg) throw new Error('Pasta de configuração não selecionada');
     var old=await _readText(cfg,'Engine.ini');
@@ -1197,17 +1213,27 @@ async function _installZipData(data,root,opt,fallbackName){
     man.kind='ini';
     return man;
   }
-  // 4. Mod UE4SS (Lua/DLL): pasta que contém enabled.txt, Scripts/main.lua ou dlls/main.dll
+  // 3. PAK e/ou mod UE4SS (Lua/DLL) — um ZIP pode ter os dois
+  function dirOf(p){var i=p.lastIndexOf('/');return i<0?'':p.slice(0,i);}
   var roots={};
   lower.forEach(function(p){
+    if(isPak(p)) return;
     var m=p.match(/^(.*?)\/?(enabled\.txt|scripts\/main\.lua|dlls\/main\.dll)$/);
     if(m) roots[m[1]]=1;
   });
   var rootList=Object.keys(roots).filter(function(r){
-    return !Object.keys(roots).some(function(o){return o!==r&&r.indexOf(o+'/')===0&&o!=='';});
+    return !Object.keys(roots).some(function(o){return o!==r&&o!==''&&r.indexOf(o+'/')===0;});
   });
-  if(!rootList.length) throw new Error('Formato de mod não reconhecido');
-  if(!await _ue4ssInstalled(root)) throw new Error('NEED_UE4SS');
+  var paks=entries.filter(function(e){return isPak(e.path);});
+  if(opt&&opt.sub!=null) paks=paks.filter(function(e){return dirOf(e.path)===opt.sub;});
+  if(!paks.length&&!rootList.length) throw new Error('Formato de mod não reconhecido');
+  if(rootList.length&&!await _ue4ssInstalled(root)) throw new Error('NEED_UE4SS');
+  var seen={};
+  for(var j=0;j<paks.length;j++){
+    var base=paks[j].path.split('/').pop();
+    if(seen[base]) continue; seen[base]=1;
+    await put(PAK_MODS+'/'+base,paks[j]);
+  }
   for(var k=0;k<rootList.length;k++){
     var r=rootList[k];
     var origName=r?entries[lower.findIndex(function(p){return p.indexOf(r+'/')===0;})].path.slice(0,r.length).split('/').pop():_safeName(fallbackName);
@@ -1216,7 +1242,9 @@ async function _installZipData(data,root,opt,fallbackName){
     var hasEnabled=false;
     for(var q=0;q<entries.length;q++){
       var lp=lower[q];
+      if(isPak(lp)) continue;
       if(r&&lp.indexOf(r+'/')!==0) continue;
+      if(!r&&/^(readme|nexus_|github_|source-and-safety|mods\.txt)/i.test(lp)) continue;
       var rel=r?entries[q].path.slice(r.length+1):entries[q].path;
       if(!rel) continue;
       if(rel.toLowerCase()==='enabled.txt') hasEnabled=true;
@@ -1227,7 +1255,8 @@ async function _installZipData(data,root,opt,fallbackName){
     man.modsTxt.push(modName);
     man.dirs=(man.dirs||[]).concat([dest]);
   }
-  man.kind='lua';
+  // Assinaturas UE4SS que alguns mods trazem são ignoradas: a UE4SS do catálogo já tem as oficiais para a versão atual do jogo
+  man.kind=rootList.length?(paks.length?'mixed':'lua'):'pak';
   return man;
 }
 
@@ -1266,7 +1295,7 @@ var _megaInstalling=new Set();
 var _megaImportRunning=false;
 var _megaImportStop=false;
 var _megaStatus={};      // id → {msg, err}
-var TYPE_LABEL={pak:'PAK','lua':'SCRIPT UE4SS','lua-files':'SCRIPT UE4SS',ini:'CONFIG',loader:'BASE'};
+var TYPE_LABEL={game:'PAK + PLUGIN',pak:'PAK',mixed:'PAK + SCRIPT','lua':'SCRIPT UE4SS','lua-files':'SCRIPT UE4SS',ini:'CONFIG',loader:'BASE'};
 
 async function loadMegaMods(){
   try{
@@ -1303,7 +1332,7 @@ function renderMegaGrid(){
           '<div class="mod-name" style="font-weight:600;font-size:13px;line-height:1.4"></div>'+
           (inst?'<span class="installed-badge">Instalado</span>':'')+
         '</div>'+
-        '<div class="mod-meta"><span class="mod-type"></span><span class="mod-size"></span></div>'+
+        '<div class="mod-meta"><span class="mod-rank" style="color:var(--gold)"></span><span class="mod-type"></span><span class="mod-size"></span></div>'+
         '<div class="mod-desc"></div>'+
         '<select class="mod-opt" style="display:none;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px;max-width:100%"></select>'+
         '<div class="mod-status" style="font-size:11px;min-height:0"></div>'+
@@ -1314,6 +1343,7 @@ function renderMegaGrid(){
     card.querySelector('.mod-name').textContent=m.name;
     card.querySelector('.mod-desc').textContent=m.desc||'';
     card.querySelector('.mod-type').textContent=TYPE_LABEL[m.type]||m.type;
+    if(m.rank) card.querySelector('.mod-rank').textContent=m.rank<=30?'★ TOP '+m.rank:'★ Popular';
     var sel=card.querySelector('.mod-opt');
     var sizeEl=card.querySelector('.mod-size');
     if(m.options.length>1){

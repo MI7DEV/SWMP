@@ -34,9 +34,8 @@ PAK_DIR     = (GAME_ROOT / "SWZeroCompany/Content/Paks/~mods") if GAME_ROOT else
 CMD_FILE    = (MP_IO_DIR / "mp_command.json") if MP_IO_DIR else None
 RESULT_FILE = (MP_IO_DIR / "mp_result.json")  if MP_IO_DIR else None
 SYNC_OUT    = (MP_IO_DIR / "mp_sync_out.json")if MP_IO_DIR else None
-# Build da UE4SS compatível com este jogo (a release genérica do GitHub falha o scan: "PS scan timed out")
-UE4SS_URL   = ("https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/08/"
-               "UE4SS_v3.0.1-1092_for_StarWarsZeroCompany_v1.0.zip")
+# UE4SS oficial v3.0.1-1181 + config oficial do jogo (testada no build 25898267), alojada no portal SWMP
+UE4SS_URL   = "https://swmp-six.vercel.app/mods/UE4SS_v3.0.1-1181_StarWarsZeroCompany.zip"
 DOWNLOADS   = Path.home() / "Downloads"
 
 # ─── Estado global ────────────────────────────────────────────────────────────
