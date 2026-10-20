@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.7
+-- ZeroCompanyMP/main.lua — v0.8
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -134,6 +134,45 @@ local function valid(obj)
     local ok, result = pcall(function() return obj:IsValid() end)
     return ok and result == true
 end
+
+-- ─── Ficheiros pendentes do portal (o Chrome não pode escrever/apagar .dll) ───
+-- O portal escreve "<x>.dll.swmp" e lista em mp_pending.json {"rename":[[de,para]],"remove":[...],"rmdir":[...]};
+-- caminhos relativos à pasta SWZeroCompany. Aqui, ao arrancar o jogo, faz-se o que o browser não pôde.
+local PENDING = MOD_PATH .. "\\mp_pending.json"
+local GAME_ROOT = MOD_PATH:match("^(.*)[/\\][Bb]inaries[/\\][Ww]in64[/\\]")
+local function game_abs(rel) return GAME_ROOT .. "\\" .. rel:gsub("/", "\\") end
+
+local function process_pending()
+    local raw = read_file(PENDING)
+    if not raw or raw == "" or not GAME_ROOT then return end
+    local ok, p = pcall(json.decode, raw)
+    if not ok or type(p) ~= "table" then return end
+    local left = { rename = {}, remove = {}, rmdir = {} }
+    for _, r in ipairs(p.rename or {}) do
+        local from, to = game_abs(r[1]), game_abs(r[2])
+        os.remove(to)
+        local okr, err = os.rename(from, to)
+        if okr then print("[ZeroCompanyMP] Instalado: " .. r[2])
+        elseif read_file(from) ~= nil then
+            left.rename[#left.rename + 1] = r   -- ainda em uso: tenta no próximo arranque
+            print("[ZeroCompanyMP] Pendente (em uso): " .. r[2] .. " — " .. tostring(err))
+        end
+    end
+    for _, rel in ipairs(p.remove or {}) do
+        local f = game_abs(rel)
+        if read_file(f) ~= nil then
+            local okd, err = os.remove(f)
+            if okd then print("[ZeroCompanyMP] Removido: " .. rel)
+            else left.remove[#left.remove + 1] = rel; print("[ZeroCompanyMP] Pendente (em uso): " .. rel .. " — " .. tostring(err)) end
+        end
+    end
+    for _, rel in ipairs(p.rmdir or {}) do
+        os.execute('rmdir /s /q "' .. game_abs(rel) .. '"')
+        print("[ZeroCompanyMP] Pasta removida: " .. rel)
+    end
+    write_file(PENDING, json.encode(left))
+end
+pcall(process_pending)
 
 -- ─── Detecção de turno (confirmado pelo jmap) ─────────────────────────────────
 -- BP_BrunoFunctionLibrary:IsPlayerTurn() → retorna tabela com .bIsPlayerTurn
@@ -405,7 +444,7 @@ ExecuteWithDelay(3000, function()
 end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.7 carregado")
+print(" ZeroCompanyMP v0.8 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")

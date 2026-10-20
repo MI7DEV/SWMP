@@ -1190,7 +1190,31 @@ async function _dirAt(root,path,create){
   return cur;
 }
 
+// O Chrome não deixa uma página ler/escrever/apagar ficheiros "perigosos" (.dll, .exe, .ps1…) — IsFileTypeDangerous.
+// Esses ficheiros são escritos como "<nome>.swmp" e o mod ZeroCompanyMP (dentro do jogo) renomeia-os ao arrancar;
+// as remoções ficam pendentes da mesma forma. Lista em ue4ss/Mods/ZeroCompanyMP/Scripts/mp_pending.json.
+var BLOCKED_EXT=/\.(dll|exe|com|bat|cmd|ps1|psm1|psd1|vbs|vbe|jse?|wsf|wsh|msi|msp|scr|cpl|reg|lnk|url|scf|hta|jar|sys|ocx|pif|inf|msc|application|gadget)$/i;
+var PENDING_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_pending.json';
+function _isBlocked(path){ return BLOCKED_EXT.test(path); }
+async function _pendUpdate(root,fn){
+  var p={};
+  try{ p=JSON.parse((await _readText(root,PENDING_FILE))||'{}'); }catch(e){}
+  p.rename=p.rename||[]; p.remove=p.remove||[]; p.rmdir=p.rmdir||[];
+  fn(p);
+  await _writeFileRaw(root,PENDING_FILE,JSON.stringify(p));
+}
 async function _writeFile(root,path,data){
+  if(_isBlocked(path)){
+    await _writeFileRaw(root,path+'.swmp',data);
+    await _pendUpdate(root,function(p){
+      p.remove=p.remove.filter(function(x){return x!==path;});
+      p.rename=p.rename.filter(function(x){return x[1]!==path;}).concat([[path+'.swmp',path]]);
+    });
+    return;
+  }
+  return _writeFileRaw(root,path,data);
+}
+async function _writeFileRaw(root,path,data){
   var segs=_splitPath(path);
   var dir=await _dirAt(root,segs.slice(0,-1).join('/'),true);
   var fh=await dir.getFileHandle(segs[segs.length-1],{create:true});
@@ -1209,12 +1233,32 @@ async function _readText(root,path){
 }
 
 async function _removePath(root,path){
+  if(_isBlocked(path)){
+    await _removePath(root,path+'.swmp');
+    await _pendUpdate(root,function(p){
+      p.rename=p.rename.filter(function(x){return x[1]!==path;});
+      if(p.remove.indexOf(path)<0) p.remove.push(path);
+    });
+    return;
+  }
   try{
     var segs=_splitPath(path);
     var dir=await _dirAt(root,segs.slice(0,-1).join('/'),false);
     await dir.removeEntry(segs[segs.length-1],{recursive:true});
+    // tira da lista de pendentes o que estava dentro do que foi apagado
+    var pend=await _readText(root,PENDING_FILE);
+    if(pend&&pend.indexOf(path+'/')>=0) await _pendUpdate(root,function(p){
+      var inside=function(x){return x.indexOf(path+'/')===0;};
+      p.rename=p.rename.filter(function(r){return !inside(r[0])&&!inside(r[1]);});
+    });
   }catch(e){
-    if(e.name!=='NotFoundError') throw e;   // ficheiro em uso (jogo aberto) não pode passar em silêncio
+    if(e.name==='NotFoundError') return;
+    // pasta com .dll (o Chrome recusa) → o mod apaga ao arrancar o jogo
+    if(e.name==='InvalidModificationError'||e.name==='NoModificationAllowedError'||/not allowed|blocked|dangerous/i.test(e.message)){
+      await _pendUpdate(root,function(p){ if(p.rmdir.indexOf(path)<0) p.rmdir.push(path); });
+      return;
+    }
+    throw e;   // ficheiro em uso (jogo aberto) não pode passar em silêncio
   }
 }
 
@@ -1233,9 +1277,10 @@ async function _modsTxt(root,name,enable){
   await _writeFile(root,path,lines.join('\r\n'));
 }
 
+// Deteta pela configuração (o Chrome não deixa ver UE4SS.dll)
+async function _ueHas(root,name){ try{ await (await _dirAt(root,WIN64_PATH+'/ue4ss',false)).getFileHandle(name); return true; }catch(e){ return false; } }
 async function _ue4ssInstalled(root){
-  try{ await (await _dirAt(root,WIN64_PATH+'/ue4ss',false)).getFileHandle('UE4SS.dll'); return true; }
-  catch(e){ return false; }
+  return (await _ueHas(root,'UE4SS-settings.ini'))||(await _ueHas(root,'UE4SS.dll.swmp'));
 }
 
 // Analisa o ZIP e instala. Devolve o manifesto (o que foi escrito) para desinstalar depois.
@@ -1249,13 +1294,13 @@ async function _installZipData(data,root,opt,fallbackName){
 
   // 1. UE4SS (loader)
   if(lower.indexOf('dwmapi.dll')>=0){
-    // remove a UE4SS genérica antiga (layout na raiz do Win64), que não arranca neste jogo
-    await _removePath(root,WIN64_PATH+'/UE4SS.dll');
-    await _removePath(root,WIN64_PATH+'/UE4SS-settings.ini');
+    // o browser não pode escrever as DLL do carregador: sem UE4SS no PC é preciso extrair o ZIP uma vez à mão
+    if(!await _ue4ssInstalled(root)) throw new Error('UE4SS_MANUAL');
     var hasModsTxt=(await _readText(root,UE4SS_MODS+'/mods.txt'))!==null;
     for(var i=0;i<entries.length;i++){
       var p=entries[i].path;
       if(/^readme/i.test(p)) continue;
+      if(_isBlocked(p)) continue;   // DLL já presentes (estão em uso pelo jogo); atualiza só a configuração
       if(hasModsTxt&&p.toLowerCase()==='ue4ss/mods/mods.txt') continue;
       await put(WIN64_PATH+'/'+p,entries[i]);
     }
@@ -1526,14 +1571,13 @@ async function _ensureUE4SS(root,btn){
     u=(d.mods||[]).find(function(m){return m.id==='ue4ss';});
   }
   if(!u) throw new Error('UE4SS não está no catálogo');
-  if(btn) btn.textContent='A instalar UE4SS...';
-  await _installCatalogMod(root,u,0,null);
-  _megaStatus['ue4ss']={msg:'✓ Instalada automaticamente'};
+  throw new Error('UE4SS_MANUAL');
 }
 
 function _errMsg(e){
   if(e.name==='NotAllowedError'||e.name==='SecurityError') return 'Permissão negada à pasta. Clica de novo e permite o acesso.';
   if(e.message==='NEED_UE4SS') return 'Falta a UE4SS.';
+  if(e.message==='UE4SS_MANUAL') return 'Falta a UE4SS (1x por PC): o browser não pode instalar ficheiros .dll. Descarrega https://swmp-six.vercel.app/mods/UE4SS_v3.0.1-1181_StarWarsZeroCompany.zip e extrai tudo para …\Star Wars Zero Company\SWZeroCompany\Binaries\Win64 (ou corre o SWMP-Host, que instala sozinho). Depois volta a carregar em Instalar.';
   if(e.name==='NoModificationAllowedError'||/locked|in use/i.test(e.message)) return 'Ficheiro em uso — fecha o jogo e tenta de novo.';
   return e.message||String(e);
 }
