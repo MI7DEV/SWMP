@@ -9,3 +9,6 @@ build/
 
 # Mods transferidos do Nexus com a conta do Marco — só cópia local, não publicar
 mods/nexus/
+
+.vercel
+.env*
