@@ -271,10 +271,10 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <div class="dot" id="srv-dot"></div>
       <span id="srv-label">Servidor</span>
     </div>
-    <a href="/api/logout" id="who" title="Sair" style="font-size:11px;color:var(--fg2);text-decoration:none;white-space:nowrap">⏻ sair</a>
+    <a href="/api/logout" id="who" title="Sair" style="display:none;font-size:11px;color:var(--fg2);text-decoration:none;white-space:nowrap">⏻ sair</a>
   </div>
 </header>
-<script>fetch('/api/login').then(function(r){return r.json();}).then(function(d){if(d.user)document.getElementById('who').textContent='👤 '+d.user+' · sair';}).catch(function(){});</script>
+<script>fetch('/api/login').then(function(r){return r.json();}).then(function(d){if(d.user){var w=document.getElementById('who');w.textContent='👤 '+d.user+' · sair';w.style.display='';}}).catch(function(){});</script>
 
 <main>
   <div class="action-row">
