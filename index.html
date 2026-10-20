@@ -418,10 +418,13 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       Troca as músicas do jogo pelas tuas (ex.: temas de Star Wars em MP3). Abre um grupo, carrega em <b style="color:var(--fg)">+ TROCAR</b>
       ao lado da música que queres substituir e escolhe uma ou várias — várias tocam em sequência ou aleatoriamente (tu escolhes). Em <b style="color:var(--fg)">★ Todas de …</b>
       as músicas servem para qualquer faixa do grupo (ex.: vários temas para todo o combate). Faixas sem troca usam as do grupo.
-      Deixa esta página aberta enquanto jogas. As tuas escolhas ficam guardadas só neste PC/browser — cada pessoa configura a sua.
+      Com <b style="color:var(--fg)">🎮 Tocar dentro do jogo</b> a trilha começa logo que o jogo abre, sem esta página aberta. As tuas escolhas ficam guardadas só neste PC — cada pessoa configura a sua.
     </p>
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg);margin-bottom:14px;cursor:pointer">
       <input type="checkbox" id="mus-mute" checked> Silenciar a música original do jogo enquanto a trilha toca (volta sozinha ao desligar ou fechar a página)
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg);margin:-6px 0 14px;cursor:pointer">
+      <input type="checkbox" id="mus-ingame" checked> 🎮 Tocar dentro do jogo (recomendado) — a trilha começa logo ao abrir o jogo, sem esta página; o amigo no Remote Play também ouve
     </label>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <button class="install-btn" id="mus-pack" style="flex:0 0 auto;padding:8px 14px">⭐ INSTALAR PACOTE ÉPICO (22 músicas grátis)</button>
@@ -1703,7 +1706,9 @@ async function _musLoad(){
   var v=await _idbGet('mus:vol'); if(typeof v==='number'){_mus.vol=v;document.getElementById('mus-vol').value=Math.round(v*100);}
   var sq=await _idbGet('mus:seq'); _mus.seq=sq===true; document.getElementById('mus-seq').value=_mus.seq?'seq':'rand';
   var mu=await _idbGet('mus:mute'); if(mu===false) document.getElementById('mus-mute').checked=false;
+  var ig=await _idbGet('mus:ingame'); if(ig===false) document.getElementById('mus-ingame').checked=false;
   _musRender();
+  _musExportSoon();
 }
 
 
@@ -1751,7 +1756,7 @@ async function _musInstallPack(btn){
       await _idbSet('mus:map',_mus.map); await _idbSet('mus:pack',have);
     }catch(e){ fail++; }
   }
-  _mus.order={}; btn.disabled=false;
+  _mus.order={}; btn.disabled=false; _musExportSoon();
   btn.textContent=fail?'⭐ PACOTE: '+done+' OK · '+fail+' falharam (tenta de novo)':'⭐ PACOTE INSTALADO ('+done+' músicas)';
   _musRender();
   if(_mus.on&&_musTarget().key!==_mus.playingKey) _musNext();
@@ -1864,7 +1869,7 @@ async function _musAdd(key,files){
     _mus.map[key].push(id); added++;
   }
   await _idbSet('mus:map',_mus.map);
-  _mus.order={};
+  _mus.order={}; _musExportSoon();
   var g=key.indexOf('all:')===0?key.slice(4):MUS_TRACK_GROUP[key]; if(g) _mus.open[g]=true;
   _musRender();
   if(!added) _musHint('Nenhum ficheiro de áudio reconhecido (usa MP3, OGG, WAV, M4A, FLAC).');
@@ -1875,7 +1880,7 @@ async function _musMove(key,id,dir){
   var a=_mus.map[key]||[], i=a.indexOf(id), j=i+dir;
   if(i<0||j<0||j>=a.length) return;
   a[i]=a[j]; a[j]=id;
-  await _idbSet('mus:map',_mus.map);
+  await _idbSet('mus:map',_mus.map); _musExportSoon();
   _mus.order={}; _musRender();
 }
 
@@ -1883,7 +1888,7 @@ async function _musRemove(key,id){
   _mus.map[key]=(_mus.map[key]||[]).filter(function(x){return x!==id;});
   await _idbSet('mus:map',_mus.map);
   await _idbSet('mus:t:'+id,null);
-  delete _mus.names[id]; _mus.order={};
+  delete _mus.names[id]; _mus.order={}; _musExportSoon();
   if(_mus.playing===id) _musNext();
   _musRender();
 }
@@ -1942,6 +1947,7 @@ function _musFade(el,to,ms,done){
 }
 
 async function _musPlay(){
+  if(_musIngame()) return;
   var T=_musTarget();
   var id=_musPick(T.key,T.ids);
   if(!id){ document.getElementById('mus-now').textContent='Escolhe pelo menos uma música para trocar (botão + TROCAR).'; return; }
@@ -1982,6 +1988,7 @@ function _musSceneLabel(){
 
 // Lê a cena escrita pelo mod (só se a pasta do jogo já estiver autorizada — nunca abre diálogos aqui)
 async function _musPoll(){
+  if(_musIngame()&&!_mus.on){ await _musPollGame(); return; }
   if(!_mus.on) return;
   var scene=null, track='';
   if(_modsDir){
@@ -2005,8 +2012,29 @@ async function _musPoll(){
   _musSceneLabel();
 }
 
+// O que o leitor do jogo está a tocar (mp_player_state.json)
+async function _musPollGame(){
+  var el=document.getElementById('mus-scene'), now=document.getElementById('mus-now');
+  if(!_modsDir) return;
+  try{
+    if(await _modsDir.queryPermission({mode:'readwrite'})!=='granted') return;
+    var txt=await _readText(_modsDir,MUS_PSTATE_FILE), d=txt?JSON.parse(txt):null;
+    var alive=d&&(Date.now()/1000-(d.ts||0))<10;
+    el.textContent=alive?'🎮 a tocar no jogo':'🎮 no jogo (à espera do jogo)';
+    if(alive&&d.file){
+      var id=String(d.file).split(/[\\/]/).pop().replace(/\.[^.]+$/,'');
+      now.textContent='🎮 ♪ '+(_mus.names[id]||id);
+      if(_mus.playing!==id){ _mus.playing=id; _musRender(); }
+    }else now.textContent=alive?'🎮 sem música para esta cena':'—';
+  }catch(e){}
+}
+
 async function _musToggle(){
   var b=document.getElementById('mus-play');
+  if(_musIngame()&&!_mus.on){
+    try{ if(await _musExport(true)!==false) _musHint(document.getElementById('mus-hint').textContent+' (com o jogo já aberto começa em segundos)'); }catch(e){}
+    return;
+  }
   if(_mus.on){ _mus.on=false; b.textContent='▶ LIGAR'; _musStop(); _musSceneLabel(); _musCtrl(true); return; }
   _mus.on=true; b.textContent='⏸ DESLIGAR';
   // Modo automático: precisa da pasta do jogo e do mod ZeroCompanyMP (instala sozinho se faltar)
@@ -2026,10 +2054,97 @@ async function _musToggle(){
   _musPlay();
 }
 
+// ── Trilha dentro do jogo: as músicas vão para …\ZeroCompanyMP\Scripts\swmp_music\ e a lista para mp_playlist.json;
+// o mod arranca o leitor (swmp_player.ps1) logo que o jogo abre — sem esta página aberta.
+// O leitor do Windows toca MP3/WAV/M4A; OGG/Opus/FLAC são convertidos aqui para MP3 (uma vez).
+var MUS_GAME_DIR=UE4SS_MODS+'/ZeroCompanyMP/Scripts';
+var MUS_PLAYLIST_FILE=MUS_GAME_DIR+'/mp_playlist.json';
+var MUS_PSTATE_FILE=MUS_GAME_DIR+'/mp_player_state.json';
+function _musIngame(){ return document.getElementById('mus-ingame').checked; }
+async function _musSniff(blob){
+  var b=new Uint8Array(await blob.slice(0,12).arrayBuffer()), s=String.fromCharCode.apply(null,b);
+  if(s.slice(0,3)==='ID3'||(b[0]===0xFF&&(b[1]&0xE0)===0xE0&&(b[1]&0x06)!==0)) return 'mp3';
+  if(s.slice(0,4)==='RIFF'&&s.slice(8,12)==='WAVE') return 'wav';
+  if(s.slice(4,8)==='ftyp') return 'm4a';
+  return null;
+}
+var _lamePromise=null;
+function _musLame(){
+  if(window.lamejs) return Promise.resolve();
+  return _lamePromise=_lamePromise||new Promise(function(ok,ko){
+    var sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+    sc.onload=ok; sc.onerror=function(){_lamePromise=null;ko(new Error('conversor MP3 indisponível'));}; document.head.appendChild(sc);
+  });
+}
+// pausa curta sem setTimeout (o browser trava os temporizadores com o separador escondido)
+function _musYield(){ return new Promise(function(r){ var c=new MessageChannel(); c.port1.onmessage=function(){r();}; c.port2.postMessage(0); }); }
+async function _musToMp3(blob){
+  await _musLame();
+  var audio=await new OfflineAudioContext(2,1,44100).decodeAudioData(await blob.arrayBuffer());
+  var L=audio.getChannelData(0), R=audio.numberOfChannels>1?audio.getChannelData(1):L;
+  var enc=new lamejs.Mp3Encoder(2,audio.sampleRate,160), out=[], N=1152*20;
+  var l16=new Int16Array(N), r16=new Int16Array(N);
+  for(var i=0;i<L.length;i+=N){
+    var n=Math.min(N,L.length-i);
+    for(var j=0;j<n;j++){ l16[j]=Math.max(-1,Math.min(1,L[i+j]))*32767; r16[j]=Math.max(-1,Math.min(1,R[i+j]))*32767; }
+    var buf=enc.encodeBuffer(l16.subarray(0,n),r16.subarray(0,n)); if(buf.length) out.push(new Uint8Array(buf));
+    if(i%(N*50)===0) await _musYield();   // não congela a página
+  }
+  var end=enc.flush(); if(end.length) out.push(new Uint8Array(end));
+  return new Blob(out,{type:'audio/mpeg'});
+}
+function _musPlaylist(files){
+  var f=function(ids){ return ids.map(function(id){return files[id];}).filter(Boolean); };
+  var track={}, group={};
+  MUS_GROUPS.forEach(function(g){
+    group[g.id]=f(_musGroupIds(g.id));
+    g.tracks.forEach(function(t){ var a=f(_mus.map[t[0]]||[]); if(a.length) track[t[0]]=a; });
+  });
+  return {on:_musIngame(),seq:!!_mus.seq,vol:_mus.vol,mute:document.getElementById('mus-mute').checked,
+    track:track,group:group,trackGroup:MUS_TRACK_GROUP,sceneGroup:MUS_SCENE_GROUP,chain:MUS_CHAIN,ts:Math.floor(Date.now()/1000)};
+}
+var _musExpChain=Promise.resolve(), _musExpTimer=null;
+function _musExportSoon(){ clearTimeout(_musExpTimer); _musExpTimer=setTimeout(function(){_musExport(false);},800); }
+function _musExport(ask){ return _musExpChain=_musExpChain.then(function(){return _musExportNow(ask);}).catch(function(e){ _musHint('Erro ao enviar para o jogo: '+e.message); }); }
+async function _musExportNow(ask){
+  var root=null;
+  if(ask) root=await _getModsDir();
+  else if(_modsDir&&await _modsDir.queryPermission({mode:'readwrite'})==='granted') root=_modsDir;
+  if(!root) return false;
+  var mods=await _dirAt(root,UE4SS_MODS,true);
+  if(!(await _hasEntry(mods,'ZeroCompanyMP','dir'))||!(await _readText(root,MUS_GAME_DIR+'/swmp_player.ps1'))&&!(await _readText(root,MUS_GAME_DIR+'/swmp_player.ps1.swmp'))){
+    if(!ask) return false;
+    _musHint('A instalar a integração com o jogo (ZeroCompanyMP)…');
+    var mp=_megaMods.find(function(m){return m.id==='zerocompanymp';});
+    if(mp) await megaInstall(mp,document.createElement('button'),0,root);
+  }
+  var dir=await _dirAt(root,MUS_GAME_DIR+'/swmp_music',true);
+  var exp=(await _idbGet('mus:exp'))||{}, files={}, ids=[];
+  Object.keys(_mus.map).forEach(function(k){ (_mus.map[k]||[]).forEach(function(id){ if(ids.indexOf(id)<0) ids.push(id); }); });
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i];
+    if(exp[id]&&await _hasEntry(dir,exp[id],'file')){ files[id]=exp[id]; continue; }
+    var t=await _idbGet('mus:t:'+id); if(!t) continue;
+    _musHint('A enviar para o jogo '+(i+1)+'/'+ids.length+': '+t.name+'…');
+    var ext=await _musSniff(t.blob), data=t.blob;
+    if(!ext){ _musHint('A converter para MP3 '+(i+1)+'/'+ids.length+': '+t.name+'…'); data=await _musToMp3(t.blob); ext='mp3'; }
+    var name=id+'.'+ext;
+    var w=await (await dir.getFileHandle(name,{create:true})).createWritable(); await w.write(data); await w.close();
+    exp[id]=name; files[id]=name; await _idbSet('mus:exp',exp);
+  }
+  // apaga músicas que já não estão na trilha
+  var keep={}; Object.keys(files).forEach(function(id){keep[files[id]]=1;});
+  for await (var entry of dir.values()){ if(entry.kind==='file'&&!keep[entry.name]) try{ await dir.removeEntry(entry.name); }catch(e){} }
+  await _writeFile(root,MUS_PLAYLIST_FILE,JSON.stringify(_musPlaylist(files)));
+  _musHint(_musIngame()?'✓ '+Object.keys(files).length+' músicas no jogo — a trilha começa logo que o jogo abre.':'');
+  return true;
+}
+
 // Silenciar a música original: o mod lê mp_music.json e chama SetMusicVolume(0) dentro do jogo.
 // "ts" é renovado a cada poll; se a página fechar, o mod repõe o volume ao fim de 20s.
 async function _musCtrl(force){
   if(!_modsDir) return;
+  if(_musIngame()&&!_mus.on) return;   // o mod trata do silêncio quando a trilha toca no jogo
   var mute=_mus.on&&document.getElementById('mus-mute').checked;
   var now=Math.floor(Date.now()/1000);
   if(!force&&_mus.lastCtrl===mute&&mute===false) return;   // desligado: escreve só uma vez
@@ -2044,10 +2159,15 @@ document.getElementById('mus-pack').addEventListener('click',function(){_musInst
 document.getElementById('mus-next').addEventListener('click',_musNext);
 document.getElementById('mus-mode').addEventListener('change',function(){_musSceneLabel();if(_mus.on&&_musTarget().key!==_mus.playingKey)_musNext();});
 document.getElementById('mus-vol').addEventListener('input',function(){
-  _mus.vol=this.value/100; var el=_mus.els[_mus.cur]; if(!el._fade) el.volume=_mus.vol; _idbSet('mus:vol',_mus.vol);
+  _mus.vol=this.value/100; var el=_mus.els[_mus.cur]; if(!el._fade) el.volume=_mus.vol; _idbSet('mus:vol',_mus.vol); _musExportSoon();
 });
-document.getElementById('mus-seq').addEventListener('change',function(){_mus.seq=this.value==='seq';_idbSet('mus:seq',_mus.seq);_mus.order={};_musRender();});
-document.getElementById('mus-mute').addEventListener('change',function(){_idbSet('mus:mute',this.checked);_musCtrl(true);});
+document.getElementById('mus-seq').addEventListener('change',function(){_mus.seq=this.value==='seq';_idbSet('mus:seq',_mus.seq);_mus.order={};_musRender();_musExportSoon();});
+document.getElementById('mus-mute').addEventListener('change',function(){_idbSet('mus:mute',this.checked);_musCtrl(true);_musExportSoon();});
+document.getElementById('mus-ingame').addEventListener('change',function(){
+  _idbSet('mus:ingame',this.checked);
+  if(this.checked&&_mus.on) _musToggle();   // pára a trilha do browser: passa a tocar no jogo
+  _musExport(this.checked);
+});
 setInterval(_musPoll,3000);
 _musLoad();
 

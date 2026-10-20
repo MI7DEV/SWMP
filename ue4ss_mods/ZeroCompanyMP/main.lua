@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.10
+-- ZeroCompanyMP/main.lua — v0.12
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -106,6 +106,7 @@ local last_round     = -1
 local last_team_name = ""
 local last_player_turn = nil
 local sync_seq       = 0     -- sequência para deduplicação de mensagens
+local combat_grace_until = 0 -- até aqui o mod não toca em objetos do jogo (início do combate)
 
 -- ─── IO ───────────────────────────────────────────────────────────────────────
 local function read_file(path)
@@ -196,7 +197,9 @@ local function get_turn_state()
     if not (ok_round and ok_team) then return nil end
 
     local team_name = "unknown"
-    if team then
+    -- no 1.º instante do combate CurrentTeamTurn ainda é nulo: GetFName num objeto nulo crasha a UE4SS
+    -- (lê o endereço 0x18 — os crashes de 20/10 às 16:46 e 19:23); o pcall não apanha isto
+    if valid(team) then
         local ok_fn, fn = pcall(function() return team:GetFName() end)
         if ok_fn and fn then
             local ok_s, s = pcall(function() return fn:ToString() end)
@@ -355,8 +358,9 @@ local function register_combat_hooks()
         NotifyOnNewObject(GS_CLASS, function(gs)
             if not valid(gs) then return end
             combat_active = true
+            combat_grace_until = os.time() + 6   -- o mapa de combate ainda está a montar objetos
             print("[ZeroCompanyMP] TacticalGameState: combate ativo.")
-            ExecuteWithDelay(2000, function() in_game_thread(function()
+            ExecuteWithDelay(7000, function() in_game_thread(function()
                 run_explorer()
                 broadcast_turn(get_turn_state(), is_player_turn())
             end) end)
@@ -453,7 +457,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.10 carregado")
+print(" ZeroCompanyMP v0.12 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -487,6 +491,7 @@ local game_track = ""
 local track_snap = {}
 
 local function track_name(sw)
+    if not valid(sw) then return nil end
     local ok, n = pcall(function() return sw:GetFName():ToString() end)
     if not ok or not n then return nil end
     return n:match("%-(.+)$") or n
@@ -497,8 +502,8 @@ local function scan_tracks()
     local list = FindAllOf("MusicPlaylistAsset")
     if not list then return snap end
     for _, a in ipairs(list) do
-        local an = a:GetFName():ToString()
-        for _, field in ipairs({ "CombatMusicPlaylists", "ExploreMusicPlaylists" }) do
+        local an = valid(a) and a:GetFName():ToString() or nil
+        for _, field in ipairs(an and { "CombatMusicPlaylists", "ExploreMusicPlaylists" } or {}) do
             pcall(function()
                 a[field]:ForEach(function(i, pl)
                     pl:get().MusicPlaylist:ForEach(function(j, tr)
@@ -574,12 +579,137 @@ local function user_settings()
     return nil
 end
 
+-- ─── Trilha sonora dentro do jogo (sem a página aberta) ───────────────────────
+-- O portal exporta as músicas para Scripts\swmp_music\ e a lista para mp_playlist.json:
+-- {"on":bool,"seq":bool,"vol":0..1,"mute":bool,"track":{faixa:[ficheiros]},"group":{grupo:[ficheiros]},
+--  "trackGroup":{faixa:grupo},"sceneGroup":{cena:grupo},"chain":{grupo:[grupos]}}
+-- O mod arranca o leitor swmp_player.ps1 (processo filho do jogo) e diz-lhe o que tocar em mp_player.json.
+local PLAYLIST_FILE = MOD_PATH .. "\\mp_playlist.json"
+local PLAYER_CMD    = MOD_PATH .. "\\mp_player.json"
+local PLAYER_STATE  = MOD_PATH .. "\\mp_player_state.json"
+local PLAYER_PS1    = MOD_PATH .. "\\swmp_player.ps1"
+local MUSIC_DIR     = MOD_PATH .. "\\swmp_music\\"
+local ig = { raw = nil, pl = nil, key = "", playing = nil, file = "", seq = 0, order = {}, pos = {}, launched = false }
+
+local function ig_has_songs(pl)
+    if not pl or not pl.on then return false end
+    for _, t in ipairs({ pl.track or {}, pl.group or {} }) do
+        for _, files in pairs(t) do if type(files) == "table" and #files > 0 then return true end end
+    end
+    return false
+end
+
+local function ig_player_alive()
+    local raw = read_file(PLAYER_STATE)
+    local ts = raw and tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+    return os.time() - ts < 6, raw
+end
+
+local function ig_launch()
+    if not read_file(PLAYER_PS1) then print("[ZeroCompanyMP] Trilha: falta swmp_player.ps1"); return end
+    -- comando fresco antes de arrancar (o da sessão anterior tem "ts" velho e o leitor desligava-se)
+    write_file(PLAYER_CMD, json.encode({ file = "", vol = 0, seq = 0, ts = os.time() }))
+    ig.file, ig.seq = "", 0
+    -- "start" devolve logo; o leitor fecha-se sozinho quando o jogo fecha
+    os.execute('start "" /B powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "'
+        .. PLAYER_PS1 .. '" -Dir "' .. MOD_PATH .. '"')
+    ig.launched, ig.launch_t = true, os.time()
+    print("[ZeroCompanyMP] Trilha: leitor arrancado")
+end
+
+-- O que tocar agora: faixa exata (se tem troca) → grupo da cena → grupos vizinhos (igual ao portal)
+local function ig_target(pl)
+    local tr = last_track or ""
+    local g = (pl.trackGroup or {})[tr] or (pl.sceneGroup or {})[last_scene] or "hub"
+    local exact = (pl.track or {})[tr]
+    if tr ~= "" and type(exact) == "table" and #exact > 0 then return tr, exact end
+    for _, cg in ipairs((pl.chain or {})[g] or { g }) do
+        local files = (pl.group or {})[cg]
+        if type(files) == "table" and #files > 0 then return "all:" .. cg, files end
+    end
+    return "", {}
+end
+
+local function ig_pick(pl, key, files)
+    if pl.seq then
+        local p
+        if ig.key == key then for i, f in ipairs(files) do if f == ig.playing then p = i end end end
+        p = p or ig.pos["s:" .. key] or 0
+        p = p % #files + 1
+        ig.pos["s:" .. key] = p
+        return files[p]
+    end
+    local o = ig.order[key]
+    if not o or #o ~= #files or (ig.pos[key] or 1) > #o then
+        o = {}
+        for i, f in ipairs(files) do o[i] = f end
+        for i = #o, 2, -1 do local j = math.random(i); o[i], o[j] = o[j], o[i] end
+        if #o > 1 and o[1] == ig.playing then table.insert(o, table.remove(o, 1)) end
+        ig.order[key] = o; ig.pos[key] = 1
+    end
+    local f = o[ig.pos[key]]
+    ig.pos[key] = ig.pos[key] + 1
+    return f
+end
+
+local function ig_send(file, restart)
+    if file ~= ig.file or restart then ig.seq = ig.seq + 1; ig.file = file end
+    local vol = tonumber(ig.pl and ig.pl.vol) or 0.7
+    write_file(PLAYER_CMD, json.encode({ file = file, vol = vol, seq = ig.seq, ts = os.time() }))
+end
+
+local function ig_tick()
+    local raw = read_file(PLAYLIST_FILE)
+    if raw ~= ig.raw then
+        ig.raw = raw
+        local ok, pl = pcall(json.decode, raw or "")
+        ig.pl = (ok and type(pl) == "table") and pl or nil
+        ig.order, ig.pos = {}, {}
+        -- lista nova/alterada no portal com o jogo aberto: arranca o leitor se ainda não estiver vivo
+        if ig_has_songs(ig.pl) and not ig_player_alive() and os.time() - (ig.launch_t or 0) > 20 then ig_launch() end
+    end
+    local pl = ig.pl
+    if not ig_has_songs(pl) then
+        if ig.file ~= "" or ig.launched then ig.key, ig.playing = "", nil; ig_send("") end
+        return
+    end
+    local key, files = ig_target(pl)
+    local _, st = ig_player_alive()
+    local ended = st and st:find('"ended"%s*:%s*true') and tonumber(st:match('"seq"%s*:%s*(%d+)')) == ig.seq
+    if key ~= ig.key and not ended and ig.playing then
+        -- mudou a cena mas a música atual também serve a nova: continua sem cortar
+        for _, f in ipairs(files) do if f == ig.playing then ig.key = key end end
+    end
+    if key ~= ig.key or ended or not ig.playing then
+        local f = ig_pick(pl, key, files)
+        if f and f:match("^[%w_%-]+%.%w+$") then
+            ig.key, ig.playing = key, f
+            print("[ZeroCompanyMP] Trilha: " .. f .. " (" .. key .. ")")
+            ig_send(MUSIC_DIR .. f, true)
+            return
+        end
+    end
+    ig_send(ig.file)   -- renova o sinal de vida para o leitor
+end
+
+-- arranque do jogo: se já há trilha configurada, o leitor começa logo (antes do menu)
+do
+    local raw = read_file(PLAYLIST_FILE)
+    local ok, pl = pcall(json.decode, raw or "")
+    if ok and ig_has_songs(pl) then
+        math.randomseed(os.time())
+        ig_launch()
+    end
+end
+
 local function apply_music_mute()
     local raw = read_file(MUSIC_CTRL)
     local want = raw ~= nil and raw:find('"mute"%s*:%s*true') ~= nil
     -- o portal renova "ts" a cada poucos segundos; sem sinal há 20s (página fechada) → repõe a música
     local ts = raw and tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
     if want and os.time() - ts > 20 then want = false end
+    -- trilha dentro do jogo: silencia a original só se o leitor estiver mesmo a tocar
+    if not want and ig.pl and ig.pl.mute and ig_has_songs(ig.pl) and ig_player_alive() then want = true end
     if want == muted_now then return end
     local s = user_settings()
     if not s then return end
@@ -711,9 +841,10 @@ local function pvp_report()
         pcall(function()
             sub.OrderedTurnGroups:ForEach(function(i, g)
                 local grp = g:get()
+                if not valid(grp) then return end
                 local name = grp:GetFName():ToString()
                 local flag = ""
-                pcall(function() flag = grp.TeamGameFlag:GetFName():ToString() end)
+                pcall(function() local f = grp.TeamGameFlag; if valid(f) then flag = f:GetFName():ToString() end end)
                 out.teams[#out.teams + 1] = { group = name, flag = flag }
             end)
         end)
@@ -806,10 +937,15 @@ do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('
 local tick_queued = false
 local function tick()
     tick_queued = false
+    scene_tick = scene_tick + 1
+    if os.time() < combat_grace_until then
+        -- início do combate: só a trilha (ficheiros), nada de objetos do jogo
+        if scene_tick % 2 == 0 then pcall(ig_tick) end
+        return
+    end
     pcall(poll)
     pcall(pvp_poll)
-    scene_tick = scene_tick + 1
-    if scene_tick % 2 == 0 then pcall(update_scene); pcall(apply_music_mute) end
+    if scene_tick % 2 == 0 then pcall(update_scene); pcall(ig_tick); pcall(apply_music_mute) end
 end
 -- o temporizador corre fora da thread do jogo: só agenda; o trabalho com objetos do jogo corre na thread do jogo
 -- (sem fila acumulada enquanto o jogo carrega um mapa)
