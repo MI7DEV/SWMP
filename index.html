@@ -382,6 +382,20 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     </div>
     <div id="mods-grid"><div id="loading"><div class="spinner"></div><br>A carregar mods do Nexus...</div></div>
   </div>
+
+  <!-- ── MegaGames: download direto, sem conta, sem servidor ── -->
+  <div id="mega-section" style="margin-top:32px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      Download Direto <span style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px" id="mega-count">A carregar...</span>
+      <span style="font-size:10px;color:var(--fg2);font-family:'Exo 2',sans-serif;letter-spacing:.04em">— sem conta Nexus, sem servidor</span>
+      <button id="btn-mega-import" onclick="megaImportAll()" style="margin-left:auto;padding:6px 16px;background:rgba(34,197,94,.1);border:1.5px solid #22c55e;border-radius:20px;color:#22c55e;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;cursor:pointer;white-space:nowrap">
+        <span id="mega-import-label">⬇ INSTALAR TODOS</span>
+      </button>
+    </h2>
+    <div id="mega-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+      <div style="color:var(--fg2);padding:16px;grid-column:1/-1"><div class="spinner" style="display:inline-block;margin-right:8px"></div>A carregar mods do MegaGames...</div>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -1428,4 +1442,130 @@ async function importAll(){
   setTimeout(function(){lbl.textContent='IMPORTAR TODOS';},5000);
   renderGrid();
 }
+
+// ─── MegaGames: download direto ───────────────────────────────────────────────
+var _megaMods=[];
+var _megaInstalled=new Set();
+var _megaInstalling=new Set();
+var _megaImportRunning=false;
+var _megaImportStop=false;
+
+async function loadMegaMods(){
+  try{
+    var d=await fetch('/api/megagames-mods',{signal:AbortSignal.timeout(30000)}).then(function(r){return r.json();});
+    _megaMods=d.mods||[];
+    document.getElementById('mega-count').textContent=_megaMods.length+' mods';
+    renderMegaGrid();
+  }catch(e){
+    document.getElementById('mega-grid').innerHTML='<div style="color:var(--red);padding:16px;grid-column:1/-1">Erro ao carregar mods do MegaGames.</div>';
+    document.getElementById('mega-count').textContent='erro';
+  }
+}
+
+function renderMegaGrid(){
+  var grid=document.getElementById('mega-grid');
+  if(!_megaMods.length){grid.innerHTML='<div style="color:var(--fg2);padding:16px;grid-column:1/-1">Nenhum mod disponível.</div>';return;}
+  grid.innerHTML='';
+  _megaMods.forEach(function(m){
+    var key=m.slug;
+    var inst=_megaInstalled.has(key);
+    var card=document.createElement('div');
+    card.className='mod-card';
+    card.innerHTML=
+      '<div class="mod-body" style="padding:14px">'+
+        '<div style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap">'+
+          '<div class="mod-name" style="font-weight:600;font-size:13px;line-height:1.4"></div>'+
+          (inst?'<span class="installed-badge">Instalado</span>':'')+
+        '</div>'+
+        '<div style="margin-top:6px;font-size:11px;color:var(--fg2)">'+m.zips.length+' ficheiro(s) disponível(eis)</div>'+
+      '</div>'+
+      '<div class="mod-footer">'+
+        '<button class="install-btn'+(inst?' installed':'')+'">'+
+          (inst?'↩ DESINSTALAR':'⬇ INSTALAR')+
+        '</button>'+
+        '<a class="nexus-link" href="'+m.page_url+'" target="_blank" rel="noopener">Ver em MegaGames →</a>'+
+      '</div>';
+    card.querySelector('.mod-name').textContent=m.short_name||m.name;
+    var btn=card.querySelector('.install-btn');
+    if(inst){
+      (function(slug,b){b.addEventListener('click',function(){megaUninstall(slug,b);});})(key,btn);
+    }else{
+      if(_megaInstalling.has(key)){btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';}
+      (function(mod,b){b.addEventListener('click',function(){megaInstall(mod,b);});})(m,btn);
+    }
+    grid.appendChild(card);
+  });
+}
+
+async function megaInstall(mod,btn){
+  if(_megaInstalling.has(mod.slug)) return;
+  _megaInstalling.add(mod.slug);
+  btn.textContent='A baixar...';btn.disabled=true;btn.style.opacity='0.7';
+  try{
+    // Download direto da primeira URL ZIP
+    var zipUrl=mod.first_zip||mod.zips[0];
+    if(!zipUrl) throw new Error('Sem URL de download');
+    var resp=await fetch(zipUrl,{signal:AbortSignal.timeout(300000)});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    btn.textContent='A extrair...';
+    var data=await resp.arrayBuffer();
+    var dir=await _getModsDir();
+    if(!dir) throw new Error('Pasta não selecionada');
+    await _extractZip(data,dir,mod.short_name||mod.name);
+    _megaInstalled.add(mod.slug);
+    _megaInstalling.delete(mod.slug);
+    renderMegaGrid();
+  }catch(e){
+    btn.textContent='⬇ INSTALAR';btn.disabled=false;btn.style.opacity='';
+    _megaInstalling.delete(mod.slug);
+    if(e.name!=='AbortError') console.warn('megaInstall:',e.message);
+  }
+}
+
+async function megaUninstall(slug,btn){
+  var mod=_megaMods.find(function(m){return m.slug===slug;});
+  if(!mod) return;
+  btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';
+  try{
+    var dir=await _getModsDir();
+    if(!dir) throw new Error('Pasta não selecionada');
+    var safe=_safeName(mod.short_name||mod.name);
+    await dir.removeEntry(safe,{recursive:true});
+    _megaInstalled.delete(slug);
+    renderMegaGrid();
+  }catch(e){
+    btn.textContent='↩ DESINSTALAR';btn.disabled=false;btn.style.opacity='';
+  }
+}
+
+function megaImportAll(){
+  if(_megaImportRunning){_megaImportStop=true;return;}
+  _megaImportRunning=true;
+  _megaImportStop=false;
+  var lbl=document.getElementById('mega-import-label');
+  var btn=document.getElementById('btn-mega-import');
+  btn.style.borderColor='var(--red)';btn.style.color='var(--red)';
+  var queue=_megaMods.filter(function(m){return !_megaInstalled.has(m.slug);});
+  var total=queue.length;
+  var done=0;
+  (async function(){
+    for(var i=0;i<queue.length;i++){
+      if(_megaImportStop) break;
+      var m=queue[i];
+      lbl.textContent='■ '+(done+1)+'/'+total+' '+m.short_name.slice(0,16)+'…';
+      // Criar botão virtual para cada mod
+      var vBtn=document.createElement('button');
+      vBtn.textContent='⬇ INSTALAR';vBtn.disabled=false;vBtn.style.opacity='';
+      try{await megaInstall(m,vBtn);done++;}catch(e){}
+      await new Promise(function(r){setTimeout(r,600);});
+    }
+    _megaImportRunning=false;_megaImportStop=false;
+    btn.style.borderColor='#22c55e';btn.style.color='#22c55e';
+    lbl.textContent='⬇ INSTALAR TODOS';
+    renderMegaGrid();
+  })();
+}
+
+// Carregar mods do MegaGames ao iniciar
+loadMegaMods();
 </script>
