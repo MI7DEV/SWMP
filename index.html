@@ -3,6 +3,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
@@ -263,9 +264,12 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     <div class="logo-text">SWMP — Mod Portal</div>
     <div class="logo-sub">Star Wars Zero Company</div>
   </div>
-  <div class="conn-dot">
-    <div class="dot" id="srv-dot"></div>
-    <span id="srv-label">Servidor</span>
+  <div style="display:flex;align-items:center;gap:12px;margin-left:auto">
+    <button id="btn-set-folder" onclick="_setModsFolder()" title="Selecionar pasta de mods" style="padding:5px 12px;background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);border-radius:6px;color:var(--gold);font-size:11px;cursor:pointer;letter-spacing:.05em;white-space:nowrap">📁 PASTA DE MODS</button>
+    <div class="conn-dot">
+      <div class="dot" id="srv-dot"></div>
+      <span id="srv-label">Servidor</span>
+    </div>
   </div>
 </header>
 
@@ -1049,79 +1053,162 @@ document.getElementById('limit-select').addEventListener('change',renderGrid);
 var _installing=new Set();
 var _uninstalling=new Set();
 
-function _pollInstall(modId,name,btn){
-  var tries=0;
-  var poll=setInterval(function(){
-    tries++;
-    if(installedMods.has(name.toLowerCase())){
-      clearInterval(poll);_installing.delete(modId);renderGrid();return;
-    }
-    if(tries>60){clearInterval(poll);_installing.delete(modId);renderGrid();}
-  },3000);
+// ── File System Access API — pasta de mods guardada em IndexedDB ──
+var _idbDb=null;
+function _openIdb(){
+  if(_idbDb) return Promise.resolve(_idbDb);
+  return new Promise(function(res,rej){
+    var r=indexedDB.open('swmp',1);
+    r.onupgradeneeded=function(){r.result.createObjectStore('kv');};
+    r.onsuccess=function(){_idbDb=r.result;res(_idbDb);};
+    r.onerror=function(){rej(r.error);};
+  });
+}
+function _idbGet(k){return _openIdb().then(function(db){return new Promise(function(res,rej){var r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}).catch(function(){return null;});}
+function _idbSet(k,v){return _openIdb().then(function(db){return new Promise(function(res,rej){var r=db.transaction('kv','readwrite').objectStore('kv').put(v,k);r.onsuccess=function(){res();};r.onerror=function(){rej(r.error);};});}).catch(function(){});}
+
+var _modsDir=null; // FileSystemDirectoryHandle em memória
+
+async function _getModsDir(forceAsk){
+  if(!window.showDirectoryPicker) return null;
+  if(!forceAsk&&_modsDir){
+    try{
+      var p=await _modsDir.queryPermission({mode:'readwrite'});
+      if(p==='granted') return _modsDir;
+    }catch(e){}
+  }
+  // Tentar handle guardado no IndexedDB
+  if(!forceAsk){
+    try{
+      var h=await _idbGet('mods_dir');
+      if(h){
+        var p2=await h.queryPermission({mode:'readwrite'});
+        if(p2!=='granted') p2=await h.requestPermission({mode:'readwrite'});
+        if(p2==='granted'){_modsDir=h;return h;}
+      }
+    }catch(e){}
+  }
+  // Pedir ao utilizador
+  var sel=await window.showDirectoryPicker({mode:'readwrite',id:'swmp-mods',startIn:'documents'});
+  _modsDir=sel;
+  await _idbSet('mods_dir',sel);
+  return sel;
 }
 
-function installMod(modId,name,btn){
+function _safeName(n){return n.replace(/[^A-Za-z0-9 _.\-]/g,'_').trim().replace(/\.+$/,'')||'mod';}
+
+async function _extractZip(data,dirHandle,modName){
+  var zip=await JSZip.loadAsync(data);
+  var files=Object.keys(zip.files).filter(function(p){return !zip.files[p].dir;});
+  // Detetar prefixo comum
+  var prefix='';
+  if(files.length){
+    var cand=files[0].split('/')[0]+'/';
+    if(files.length>1&&files.every(function(f){return f.startsWith(cand);})) prefix=cand;
+  }
+  var modDir=await dirHandle.getDirectoryHandle(_safeName(modName),{create:true});
+  for(var i=0;i<files.length;i++){
+    var path=files[i];
+    var rel=prefix?path.slice(prefix.length):path;
+    if(!rel) continue;
+    var segs=rel.split('/');
+    var cur=modDir;
+    for(var j=0;j<segs.length-1;j++) cur=await cur.getDirectoryHandle(segs[j],{create:true});
+    var fh=await cur.getFileHandle(segs[segs.length-1],{create:true});
+    var w=await fh.createWritable();
+    await w.write(await zip.files[path].async('arraybuffer'));
+    await w.close();
+  }
+  return _safeName(modName);
+}
+
+async function installMod(modId,name,btn){
   if(_installing.has(modId)) return;
   _installing.add(modId);
   btn.textContent='A obter link...';btn.disabled=true;btn.style.opacity='0.7';
-  // Ask Vercel for CDN URL (uses server-side NX_KEY — key never reaches browser)
-  fetch('/api/nexus-cdn?mod_id='+modId,{signal:AbortSignal.timeout(10000)})
-    .then(function(r){return r.json();})
-    .then(function(cdn){
-      if(cdn.need_premium){
-        // Free account: fall back to local server opening browser + watching Downloads
-        btn.textContent='A abrir Nexus...';
-        return fetch(LOCAL+'/api/nexus/install-start',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-          body:JSON.stringify({id:String(modId),name:name}),
-          signal:AbortSignal.timeout(5000)})
-          .then(function(r){return r.json();})
-          .then(function(d){
-            if(d.status==='started'){btn.textContent='A aguardar download...';_pollInstall(modId,name,btn);}
-            else{btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';_installing.delete(modId);}
-          });
-      }
-      // Premium: download via CDN URL, local server installs
-      btn.textContent='A instalar...';
-      return fetch(LOCAL+'/api/install-url',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
-        body:JSON.stringify({url:cdn.url,name:name}),
-        signal:AbortSignal.timeout(10000)})
-        .then(function(r){return r.json();})
-        .then(function(d){
-          if(d.status==='started'){_pollInstall(modId,name,btn);}
-          else{btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';_installing.delete(modId);}
-        });
-    })
-    .catch(function(){
-      btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+  try{
+    // 1. Obter URL CDN via Vercel (NX_KEY server-side)
+    var cdn=await fetch('/api/nexus-cdn?mod_id='+modId,{signal:AbortSignal.timeout(10000)}).then(function(r){return r.json();});
+    var zipData;
+    if(cdn.need_premium){
+      // Conta gratuita: abrir Nexus + pedir ao utilizador que selecione o zip descarregado
+      window.open(cdn.fallback_url,'_blank');
+      btn.textContent='Selecionar ZIP';btn.disabled=false;btn.style.opacity='';
       _installing.delete(modId);
-    });
+      (function(mId,mName,b){
+        b.onclick=null;
+        b.addEventListener('click',function onPick(){
+          b.removeEventListener('click',onPick);
+          _installFromPicker(mId,mName,b);
+        },{once:true});
+      })(modId,name,btn);
+      return;
+    }
+    // 2. Descarregar ZIP do CDN
+    btn.textContent='A descarregar...';
+    var resp=await fetch(cdn.url,{signal:AbortSignal.timeout(180000)});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    zipData=await resp.arrayBuffer();
+    // 3. Escrever na pasta de mods via File System Access API
+    btn.textContent='A selecionar pasta...';
+    var dir=await _getModsDir();
+    if(!dir) throw new Error('Pasta não selecionada');
+    btn.textContent='A instalar...';
+    await _extractZip(zipData,dir,name);
+    installedMods.add(name.toLowerCase());
+    _installing.delete(modId);
+    renderGrid();
+  }catch(e){
+    btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+    _installing.delete(modId);
+    if(e.name!=='AbortError'&&e.name!=='NotAllowedError') console.warn('installMod:',e.message);
+  }
 }
 
-function uninstallMod(name,btn){
+async function _installFromPicker(modId,name,btn){
+  _installing.add(modId);
+  btn.textContent='A instalar...';btn.disabled=true;btn.style.opacity='0.7';
+  try{
+    var [fh]=await window.showOpenFilePicker({types:[{description:'Mod ZIP',accept:{'application/zip':['.zip']}}],multiple:false});
+    var file=await fh.getFile();
+    var data=await file.arrayBuffer();
+    var dir=await _getModsDir();
+    if(!dir) throw new Error('Pasta não selecionada');
+    await _extractZip(data,dir,name);
+    installedMods.add(name.toLowerCase());
+    _installing.delete(modId);
+    renderGrid();
+  }catch(e){
+    btn.textContent='INSTALAR';btn.disabled=false;btn.style.opacity='';
+    _installing.delete(modId);
+  }
+}
+
+async function _setModsFolder(){
+  try{
+    var dir=await _getModsDir(true); // forceAsk=true
+    if(dir){
+      var btn=document.getElementById('btn-set-folder');
+      if(btn){btn.textContent='📁 '+dir.name;setTimeout(function(){btn.textContent='📁 PASTA DE MODS';},3000);}
+    }
+  }catch(e){}
+}
+
+async function uninstallMod(name,btn){
   if(_uninstalling.has(name)) return;
   _uninstalling.add(name);
   btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';
-  fetch(LOCAL+'/api/nexus/uninstall?name='+encodeURIComponent(name),{
-    signal:AbortSignal.timeout(8000)})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.status==='ok'||d.removed){
-        installedMods.delete(name.toLowerCase());
-        _uninstalling.delete(name);
-        renderGrid();
-      } else {
-        btn.textContent='DESINSTALAR';btn.disabled=false;btn.style.opacity='';
-        _uninstalling.delete(name);
-      }
-    })
-    .catch(function(){
-      btn.textContent='DESINSTALAR';btn.disabled=false;btn.style.opacity='';
-      _uninstalling.delete(name);
-    });
+  try{
+    var dir=await _getModsDir();
+    if(!dir) throw new Error('Pasta não selecionada');
+    await dir.removeEntry(_safeName(name),{recursive:true});
+    installedMods.delete(name.toLowerCase());
+    _uninstalling.delete(name);
+    renderGrid();
+  }catch(e){
+    btn.textContent='↩ DESINSTALAR';btn.disabled=false;btn.style.opacity='';
+    _uninstalling.delete(name);
+  }
 }
 
 function renderGrid(){
