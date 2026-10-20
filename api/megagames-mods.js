@@ -1,18 +1,36 @@
 /**
- * Scrapes MegaGames for Star Wars Zero Company mods and returns
- * their direct ZIP download URLs (hosted on RocketCDN, no auth needed).
- * Cached 1 hour on Vercel edge.
+ * Devolve mods do Star Wars Zero Company do MegaGames com links ZIP diretos.
+ * Usa lista hardcoded + scraping da página de listagem para novos mods.
+ * Cached 1 hora no Vercel edge.
  */
+const MOD_BASE = "https://megagames.com/mods/";
 const LISTING_URL = "https://megagames.com/games/star-wars-zero-company/mod";
-const MOD_BASE    = "https://megagames.com/mods/";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 SWMP/1.0";
+
+// Slugs conhecidos (obtidos via browser - lista base garantida)
+const KNOWN_SLUGS = [
+  "star-wars-zero-company-cheaper-actions-mod-v1-3-1",
+  "star-wars-zero-company-swift-combat-and-retaliation-mod-v2-2-0",
+  "star-wars-zero-company-skip-tutorial-level-and-permadeath-and-beskar-switcher-mod-v1-0",
+  "star-wars-zero-company-fast-resonance-mod-v1-0-2",
+  "star-wars-zero-company-mission-and-campaign-time-control-mod-v1-0",
+  "star-wars-zero-company-all-player-weapon-buff-mod-v1-0",
+  "star-wars-zero-company-more-contacts-mod-v1-0",
+  "star-wars-zero-company-more-capacitors-mod-v1-0",
+  "star-wars-zero-company-upgrade-discounts-and-durations-mod-v2-0",
+  "star-wars-zero-company-blackmarket-discounts-mod-v2-0",
+  "star-wars-zero-company-operations-tweaks-mod-v5-0",
+  "star-wars-zero-company-ultimate-engine-tweaks-anti-stutters-more-performance-lower-latency-better-clarity-lossless-mod-v1-0",
+  "star-wars-zero-company-full-customization-mod-mandalorian-padawan-and-more-mod-v1-3",
+  "star-wars-zero-company-ue4ss-for-star-wars-zero-company-mod-v1-0",
+];
 
 async function fetchText(url) {
   const r = await fetch(url, {
     headers: { "User-Agent": UA, Accept: "text/html" },
     signal: AbortSignal.timeout(8000),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.text();
 }
 
@@ -32,14 +50,7 @@ function extractTitle(html) {
   return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
 }
 
-function extractDesc(html) {
-  // Try to get first paragraph of article
-  const m = html.match(/<article[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i);
-  return m ? m[1].replace(/<[^>]+>/g, "").trim().slice(0, 200) : "";
-}
-
 function cleanName(title) {
-  // Remove "Star Wars Zero Company " prefix and version suffix
   return title
     .replace(/^Star Wars Zero Company\s*/i, "")
     .replace(/\s+Mod\s+v[\d.]+\s*$/i, "")
@@ -57,30 +68,20 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Get listing page (and any subsequent pages)
-    const slugs = new Set();
-    const slugRe = /href="https:\/\/megagames\.com\/mods\/(star-wars-zero-company[^"]+)"/gi;
-    const pageUrls = [LISTING_URL];
-    // Check for pagination links too
-    for (const pageUrl of pageUrls) {
-      let listHtml;
-      try { listHtml = await fetchText(pageUrl); } catch { continue; }
+    // Discover new slugs from the listing page (static HTML only)
+    const extraSlugs = new Set(KNOWN_SLUGS);
+    try {
+      const listHtml = await fetchText(LISTING_URL);
+      const slugRe = /href="https:\/\/megagames\.com\/mods\/(star-wars-zero-company[^"]+)"/gi;
       let m;
-      while ((m = slugRe.exec(listHtml)) !== null) { slugs.add(m[1]); }
-      slugRe.lastIndex = 0;
-      // Find next page link
-      const nextRe = /href="(https:\/\/megagames\.com\/games\/star-wars-zero-company\/mod\/page\/\d+[^"]*)"/i;
-      const nextM = listHtml.match(nextRe);
-      if (nextM && !pageUrls.includes(nextM[1])) pageUrls.push(nextM[1]);
-    }
+      while ((m = slugRe.exec(listHtml)) !== null) extraSlugs.add(m[1]);
+    } catch { /* ignore listing errors, fall back to hardcoded */ }
 
-    if (!slugs.size) {
-      return res.status(200).json({ mods: [], error: "No mods found on listing page" });
-    }
+    const allSlugs = [...extraSlugs];
 
-    // 3. Fetch each mod page in parallel
+    // Fetch each mod page in parallel to get ZIP URLs
     const results = await Promise.allSettled(
-      [...slugs].map(async (slug) => {
+      allSlugs.map(async (slug) => {
         const pageUrl = MOD_BASE + slug;
         const html = await fetchText(pageUrl);
         const zips = extractZips(html);
