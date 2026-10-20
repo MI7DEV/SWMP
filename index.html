@@ -374,22 +374,31 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <span id="mus-scene" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">desligada</span>
     </h2>
     <p style="font-size:12px;color:var(--fg2);line-height:1.6;margin-bottom:14px">
-      Troca as músicas repetitivas do jogo pelas tuas (ex.: temas de Star Wars em MP3). Adiciona músicas em cada lista —
-      o SWMP sabe o que o jogo está a tocar (menu/base, exploração de missão ou combate) e toca a tua lista certa,
-      com transição suave. Deixa esta página aberta enquanto jogas.
+      Troca as músicas do jogo pelas tuas (ex.: temas de Star Wars em MP3). Abre um grupo, carrega em <b style="color:var(--fg)">+ TROCAR</b>
+      ao lado da música que queres substituir e escolhe uma ou várias — várias tocam em sequência ou aleatoriamente (tu escolhes). Em <b style="color:var(--fg)">★ Todas de …</b>
+      as músicas servem para qualquer faixa do grupo (ex.: vários temas para todo o combate). Faixas sem troca usam as do grupo.
+      Deixa esta página aberta enquanto jogas. As tuas escolhas ficam guardadas só neste PC/browser — cada pessoa configura a sua.
     </p>
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg);margin-bottom:14px;cursor:pointer">
       <input type="checkbox" id="mus-mute" checked> Silenciar a música original do jogo enquanto a trilha toca (volta sozinha ao desligar ou fechar a página)
     </label>
-    <div id="mus-lists" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px"></div>
+    <div id="mus-count" style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:8px"></div>
+    <div id="mus-lists" style="display:flex;flex-direction:column;gap:8px"></div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
       <button class="install-btn" id="mus-play" style="flex:0 0 auto;padding:8px 16px">▶ LIGAR</button>
       <button class="install-btn" id="mus-next" style="flex:0 0 auto;padding:8px 12px" title="Próxima música">⏭</button>
       <select id="mus-mode" style="padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px">
         <option value="auto">Automático (segue o jogo)</option>
-        <option value="strategy">Só lista Menu / Base</option>
-        <option value="explore">Só lista Missão</option>
-        <option value="combat">Só lista Combate</option>
+        <option value="menu">Só Menu principal</option>
+        <option value="hub">Só Base / Campanha</option>
+        <option value="explore">Só Missão — exploração</option>
+        <option value="combat">Só Combate</option>
+        <option value="boss">Só Chefes</option>
+        <option value="cine">Só Cinemáticas</option>
+      </select>
+      <select id="mus-seq" title="Ordem das músicas" style="padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:11px">
+        <option value="rand">🔀 Ordem aleatória</option>
+        <option value="seq">🔁 Em sequência (ordem que definires com ◀ ▶)</option>
       </select>
       <label style="font-size:11px;color:var(--fg2);display:flex;align-items:center;gap:6px">Volume
         <input id="mus-vol" type="range" min="0" max="100" value="70" style="width:110px"></label>
@@ -1538,102 +1547,207 @@ async function megaImportAll(){
 
 // ─── Trilha sonora dinâmica ───────────────────────────────────────────────────
 // As músicas do utilizador ficam no browser (IndexedDB). O mod ZeroCompanyMP escreve a cena atual
-// em …\ue4ss\Mods\ZeroCompanyMP\Scripts\mp_scene.json; esta página lê o ficheiro pela pasta do jogo
-// já autorizada e troca de lista (Base ↔ Combate) com crossfade. A música original do jogo é
-// silenciada pondo MusicVolume=0 em GameUserSettings.ini.
-var MUS_LISTS=[{id:'strategy',label:'Menu / Base',icon:'🛰'},{id:'explore',label:'Missão (exploração)',icon:'🔭'},{id:'combat',label:'Combate',icon:'⚔'}];
+// (e a faixa, quando a conhece) em …\ue4ss\Mods\ZeroCompanyMP\Scripts\mp_scene.json; esta página lê o
+// ficheiro pela pasta do jogo já autorizada e toca a substituta certa com crossfade. A música original
+// é silenciada pelo próprio mod (SetMusicVolume) enquanto a trilha está ligada.
+// Faixas de música do jogo (valores Wwise MX_* encontrados nos .utoc do jogo; silêncios/stingers de fora)
+var MUS_GROUPS=[
+  {id:'menu',label:'Menu principal',icon:'🎬',tracks:[['Shell_01','Tema do menu principal']]},
+  {id:'hub',label:'Base / Campanha',icon:'🛰',tracks:[['Hub_Early','Base — início da campanha'],['Hub_Middle','Base — meio da campanha'],['Hub_Late','Base — fim da campanha'],
+    ['Hub_SquadSelect','Escolha do esquadrão'],['Hub_To_Mission_Start','Partida para a missão'],['Mission_To_Hub_Start','Regresso à base (início)'],['Mission_To_Hub_End','Regresso à base (fim)']]},
+  {id:'explore',label:'Missão — exploração',icon:'🔭',tracks:[['Explore_01','Exploração 1'],['Explore_02','Exploração 2'],['Explore_03','Exploração 3'],['Explore_04','Exploração 4'],
+    ['Explore_06','Exploração 6'],['Explore_07','Exploração 7'],['Explore_08','Exploração 8'],['Explore_GP_01','Exploração GP 1'],['Explore_GP_02','Exploração GP 2'],
+    ['Explore_GP_04','Exploração GP 4'],['Explore_GP_09','Exploração GP 9'],['Explore_FinaleAssault','Assalto final']]},
+  {id:'combat',label:'Combate',icon:'⚔',tracks:[['General_Combat_01','Combate geral 1'],['General_Combat_02','Combate geral 2'],['General_Combat_03','Combate geral 3'],
+    ['General_Combat_04','Combate geral 4'],['General_Combat_05','Combate geral 5'],['General_Combat_06','Combate geral 6'],['General_Combat_07','Combate geral 7'],
+    ['General_Combat_08','Combate geral 8'],['General_Combat_09','Combate geral 9'],['General_Combat_10','Combate geral 10'],['General_Combat_11','Combate geral 11'],
+    ['General_Combat_12','Combate geral 12'],['General_Combat_13','Combate geral 13'],['Den_Combat','Combate no covil'],['Bespin_Civilian_Rescue','Bespin — resgate de civis'],
+    ['VisserCombat','Combate contra Visser'],['TyphonCombat_Phase1_L1','Combate contra Typhon'],['Finale_Combat','Combate final'],['Combat_Loss','Derrota']]},
+  {id:'boss',label:'Chefes',icon:'💀',tracks:[['Boss_Combat_1','Chefe 1'],['Droideka_Boss_Combat','Chefe Droideka'],['Final_Boss_Combat','Chefe final — fase 1'],['Final_Boss_Combat_Phase2','Chefe final — fase 2']]},
+  {id:'cine',label:'Cinemáticas e momentos',icon:'🎞',tracks:[['Mood_EveOfBattle','Véspera da batalha'],['Mood_ReadyForAction','Pronto para a ação'],['Mood_TriumphA','Triunfo'],
+    ['Mood_EmotionalA','Emotiva A'],['Mood_EmotionalB','Emotiva B'],['Mood_DistressA','Aflição A'],['Mood_DistressB','Aflição B'],['Mood_Tense_Light','Tensão leve'],
+    ['Mood_TenseA','Tensão A'],['Mood_TenseB','Tensão B'],['3150_EnterTheJedi','Enter the Jedi'],['3300_BespinFinale','Bespin Finale'],['4500_FathomEscapes','Fathom Escapes'],
+    ['4600_ANewOrder','A New Order'],['Credits','Créditos finais']]}
+];
+var MUS_TRACK_GROUP={}; MUS_GROUPS.forEach(function(g){g.tracks.forEach(function(t){MUS_TRACK_GROUP[t[0]]=g.id;});});
+var MUS_TOTAL=Object.keys(MUS_TRACK_GROUP).length;
+var MUS_SCENE_GROUP={menu:'menu',strategy:'hub',explore:'explore',combat:'combat'};
+// grupo sem músicas → tenta os seguintes
+var MUS_CHAIN={menu:['menu','hub','explore','combat'],hub:['hub','menu','explore','combat'],explore:['explore','combat','hub','menu'],
+  combat:['combat','boss','explore','hub','menu'],boss:['boss','combat','explore','hub'],cine:['cine','hub','menu']};
 var MUS_CTRL_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_music.json';
-var MUS_SCENE_LABEL={menu:'🛰 menu',strategy:'🛰 na base',explore:'🔭 em missão',combat:'⚔ em combate'};
+var MUS_SCENE_LABEL={menu:'🎬 menu',strategy:'🛰 na base',explore:'🔭 em missão',combat:'⚔ em combate'};
 var MUS_SCENE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_scene.json';
 var MUS_FADE_MS=2500;
-var _mus={lists:{strategy:[],explore:[],combat:[]},names:{},on:false,scene:'strategy',playing:null,order:{},pos:{},
-  els:[new Audio(),new Audio()],cur:0,url:[null,null],vol:0.7,gameAlive:false,lastPoll:0};
+// map: { '<faixa>' | 'all:<grupo>' : [ids das músicas do utilizador] }
+var _mus={map:{},names:{},on:false,scene:'menu',track:'',playing:null,playingKey:'',order:{},pos:{},open:{},
+  els:[new Audio(),new Audio()],cur:0,url:[null,null],vol:0.7,gameAlive:false};
 
 async function _musLoad(){
-  var l=await _idbGet('mus:lists');
-  if(l&&l.strategy){ _mus.lists.strategy=l.strategy||[]; _mus.lists.explore=l.explore||[]; _mus.lists.combat=l.combat||[]; }
-  var ids=_mus.lists.strategy.concat(_mus.lists.explore,_mus.lists.combat);
-  for(var i=0;i<ids.length;i++){ var t=await _idbGet('mus:t:'+ids[i]); _mus.names[ids[i]]=t?t.name:null; }
-  // remove referências a faixas que já não existem
-  ['strategy','explore','combat'].forEach(function(k){ _mus.lists[k]=_mus.lists[k].filter(function(id){return _mus.names[id];}); });
+  var m=await _idbGet('mus:map');
+  if(m&&typeof m==='object') _mus.map=m;
+  else{ // migra as 3 listas antigas para "todas do grupo"
+    var l=await _idbGet('mus:lists');
+    if(l){ _mus.map={'all:hub':l.strategy||[],'all:explore':l.explore||[],'all:combat':l.combat||[]}; await _idbSet('mus:map',_mus.map); }
+  }
+  var keys=Object.keys(_mus.map);
+  for(var i=0;i<keys.length;i++){
+    var ids=_mus.map[keys[i]]||[];
+    for(var j=0;j<ids.length;j++) if(!(ids[j] in _mus.names)){ var t=await _idbGet('mus:t:'+ids[j]); _mus.names[ids[j]]=t?t.name:null; }
+    _mus.map[keys[i]]=ids.filter(function(id){return _mus.names[id];});
+  }
   var v=await _idbGet('mus:vol'); if(typeof v==='number'){_mus.vol=v;document.getElementById('mus-vol').value=Math.round(v*100);}
+  var sq=await _idbGet('mus:seq'); _mus.seq=sq===true; document.getElementById('mus-seq').value=_mus.seq?'seq':'rand';
   var mu=await _idbGet('mus:mute'); if(mu===false) document.getElementById('mus-mute').checked=false;
   _musRender();
+}
+
+function _musSlotCount(g){ var n=0; g.tracks.forEach(function(t){ if((_mus.map[t[0]]||[]).length) n++; }); return n; }
+
+function _musRow(key,label,sub){
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-radius:6px;background:rgba(255,255,255,.03);flex-wrap:wrap';
+  var ids=_mus.map[key]||[];
+  var live=_mus.playingKey===key;
+  var name=document.createElement('div');
+  name.style.cssText='flex:0 0 210px;max-width:100%;font-size:12px;color:'+(live?'var(--gold)':'var(--fg)');
+  name.textContent=(live?'▶ ':'')+label;
+  if(sub){ var s=document.createElement('div'); s.style.cssText='font-size:10px;color:var(--fg2)'; s.textContent=sub; name.appendChild(s); }
+  var songs=document.createElement('div');
+  songs.style.cssText='flex:1 1 220px;min-width:0;display:flex;flex-wrap:wrap;gap:4px;align-items:center';
+  if(!ids.length){ var o=document.createElement('span'); o.style.cssText='font-size:11px;color:var(--fg2)'; o.textContent=key.indexOf('all:')===0?'—':'original do jogo'; songs.appendChild(o); }
+  ids.forEach(function(id){
+    var c=document.createElement('span');
+    c.style.cssText='font-size:11px;background:rgba(255,255,255,.08);border-radius:10px;padding:2px 4px 2px 8px;display:inline-flex;align-items:center;gap:2px;max-width:100%;'+(_mus.playing===id?'color:var(--gold)':'color:var(--fg)');
+    var n=document.createElement('span'); n.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
+    n.textContent='♪ '+_mus.names[id];
+    var x=document.createElement('button'); x.textContent='×'; x.title='Remover';
+    x.style.cssText='background:none;border:none;color:var(--fg2);cursor:pointer;font-size:13px;padding:0 3px';
+    x.addEventListener('click',function(){_musRemove(key,id);});
+    if(_mus.seq&&ids.length>1){
+      [['◀',-1],['▶',1]].forEach(function(b){
+        var m=document.createElement('button'); m.textContent=b[0]; m.title=b[1]<0?'Tocar antes':'Tocar depois';
+        m.style.cssText='background:none;border:none;color:var(--fg2);cursor:pointer;font-size:10px;padding:0 2px';
+        m.addEventListener('click',function(){_musMove(key,id,b[1]);});
+        c.appendChild(m);
+      });
+    }
+    c.appendChild(n); c.appendChild(x); songs.appendChild(c);
+  });
+  var add=document.createElement('button'); add.className='install-btn'; add.textContent=ids.length?'+':'+ TROCAR';
+  add.title='Escolhe uma ou várias músicas (várias = tocam em sequência ou aleatoriamente)';
+  add.style.cssText='flex:0 0 auto;padding:4px 10px;font-size:11px';
+  var inp=document.createElement('input'); inp.type='file'; inp.multiple=true; inp.accept='audio/*,.mp3,.ogg,.wav,.m4a,.flac,.opus'; inp.style.display='none';
+  add.addEventListener('click',function(){inp.click();});
+  inp.addEventListener('change',function(){_musAdd(key,inp.files);inp.value='';});
+  row.addEventListener('dragover',function(ev){ev.preventDefault();row.style.outline='1px solid var(--gold)';});
+  row.addEventListener('dragleave',function(){row.style.outline='';});
+  row.addEventListener('drop',function(ev){ev.preventDefault();row.style.outline='';_musAdd(key,ev.dataTransfer.files);});
+  row.appendChild(name); row.appendChild(songs); row.appendChild(add); row.appendChild(inp);
+  return row;
 }
 
 function _musRender(){
   var box=document.getElementById('mus-lists');
   box.innerHTML='';
-  MUS_LISTS.forEach(function(L){
-    var card=document.createElement('div');
-    card.className='mod-card';
-    card.innerHTML='<div class="mod-body" style="padding:14px"><div class="mod-name" style="font-weight:600;font-size:13px"></div>'+
-      '<div class="mus-tracks" style="font-size:11px;color:var(--fg2);max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:6px"></div></div>'+
-      '<div class="mod-footer"><button class="install-btn">+ ADICIONAR MÚSICAS</button>'+
-      '<input type="file" accept="audio/*,.mp3,.ogg,.wav,.m4a,.flac,.opus" multiple style="display:none"></div>';
-    var ids=_mus.lists[L.id];
-    card.querySelector('.mod-name').textContent=L.icon+' '+L.label+' ('+ids.length+')';
-    var tl=card.querySelector('.mus-tracks');
-    if(!ids.length){ var e=document.createElement('div'); e.textContent='Sem músicas — adiciona ou arrasta ficheiros para aqui.'; tl.appendChild(e); }
-    ids.forEach(function(id){
-      var row=document.createElement('div');
-      row.style.cssText='display:flex;gap:6px;align-items:center';
-      var n=document.createElement('span'); n.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      n.textContent=(_mus.playing===id?'▶ ':'')+_mus.names[id];
-      if(_mus.playing===id) n.style.color='var(--gold)';
-      var x=document.createElement('button'); x.textContent='×'; x.title='Remover';
-      x.style.cssText='background:none;border:none;color:var(--fg2);cursor:pointer;font-size:14px';
-      x.addEventListener('click',function(){_musRemove(L.id,id);});
-      row.appendChild(n); row.appendChild(x); tl.appendChild(row);
-    });
-    var inp=card.querySelector('input'), btn=card.querySelector('.install-btn');
-    btn.addEventListener('click',function(){inp.click();});
-    inp.addEventListener('change',function(){_musAdd(L.id,inp.files);inp.value='';});
-    card.addEventListener('dragover',function(ev){ev.preventDefault();card.style.borderColor='var(--gold)';});
-    card.addEventListener('dragleave',function(){card.style.borderColor='';});
-    card.addEventListener('drop',function(ev){ev.preventDefault();card.style.borderColor='';_musAdd(L.id,ev.dataTransfer.files);});
-    box.appendChild(card);
+  var replaced=0; MUS_GROUPS.forEach(function(g){replaced+=_musSlotCount(g);});
+  document.getElementById('mus-count').textContent='O jogo tem '+MUS_TOTAL+' músicas · '+replaced+' trocadas';
+  MUS_GROUPS.forEach(function(g){
+    var d=document.createElement('details');
+    d.className='mod-card'; d.style.cssText='padding:10px 12px';
+    if(_mus.open[g.id]) d.open=true;
+    d.addEventListener('toggle',function(){_mus.open[g.id]=d.open;});
+    var sm=document.createElement('summary');
+    sm.style.cssText='cursor:pointer;font-weight:600;font-size:13px;color:var(--fg)';
+    var all=(_mus.map['all:'+g.id]||[]).length;
+    sm.textContent=g.icon+' '+g.label+' — '+g.tracks.length+' música'+(g.tracks.length>1?'s':'')+' · '+_musSlotCount(g)+' trocada'+(_musSlotCount(g)===1?'':'s')+(all?' · '+all+' no aleatório':'');
+    d.appendChild(sm);
+    var list=document.createElement('div');
+    list.style.cssText='display:flex;flex-direction:column;gap:4px;margin-top:8px';
+    if(g.tracks.length>1) list.appendChild(_musRow('all:'+g.id,'★ Todas de '+g.label,'músicas aqui tocam em qualquer faixa deste grupo que não tenha troca própria'));
+    g.tracks.forEach(function(t){ list.appendChild(_musRow(t[0],t[1],t[0])); });
+    d.appendChild(list);
+    box.appendChild(d);
   });
 }
 
-async function _musAdd(list,files){
+async function _musAdd(key,files){
   var added=0;
+  _mus.map[key]=_mus.map[key]||[];
   for(var i=0;i<files.length;i++){
     var f=files[i];
     if(!/^audio\//.test(f.type)&&!/\.(mp3|ogg|wav|m4a|flac|opus|aac)$/i.test(f.name)) continue;
     var id=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     await _idbSet('mus:t:'+id,{name:f.name.replace(/\.[^.]+$/,''),blob:f});
     _mus.names[id]=f.name.replace(/\.[^.]+$/,'');
-    _mus.lists[list].push(id); added++;
+    _mus.map[key].push(id); added++;
   }
-  await _idbSet('mus:lists',_mus.lists);
-  delete _mus.order[list];
+  await _idbSet('mus:map',_mus.map);
+  _mus.order={};
+  var g=key.indexOf('all:')===0?key.slice(4):MUS_TRACK_GROUP[key]; if(g) _mus.open[g]=true;
   _musRender();
   if(!added) _musHint('Nenhum ficheiro de áudio reconhecido (usa MP3, OGG, WAV, M4A, FLAC).');
+  else if(_mus.on&&_musTarget().key!==_mus.playingKey) _musNext();
 }
 
-async function _musRemove(list,id){
-  _mus.lists[list]=_mus.lists[list].filter(function(x){return x!==id;});
-  await _idbSet('mus:lists',_mus.lists);
+async function _musMove(key,id,dir){
+  var a=_mus.map[key]||[], i=a.indexOf(id), j=i+dir;
+  if(i<0||j<0||j>=a.length) return;
+  a[i]=a[j]; a[j]=id;
+  await _idbSet('mus:map',_mus.map);
+  _mus.order={}; _musRender();
+}
+
+async function _musRemove(key,id){
+  _mus.map[key]=(_mus.map[key]||[]).filter(function(x){return x!==id;});
+  await _idbSet('mus:map',_mus.map);
   await _idbSet('mus:t:'+id,null);
-  delete _mus.names[id]; delete _mus.order[list];
+  delete _mus.names[id]; _mus.order={};
   if(_mus.playing===id) _musNext();
   _musRender();
 }
 
 function _musHint(t){ document.getElementById('mus-hint').textContent=t||''; }
 
-// Ordem aleatória por lista, sem repetir até tocar todas
-function _musPick(list){
-  var ids=_mus.lists[list];
+// Músicas de um grupo: as de "todas" + as de cada faixa
+function _musGroupIds(g){
+  var G=MUS_GROUPS.find(function(x){return x.id===g;}); if(!G) return [];
+  var ids=(_mus.map['all:'+g]||[]).slice();
+  G.tracks.forEach(function(t){ ids=ids.concat(_mus.map[t[0]]||[]); });
+  return ids;
+}
+
+// O que tocar agora: faixa exata (se o jogo disse qual e tem troca) → grupo da cena → grupos vizinhos
+function _musTarget(){
+  var mode=document.getElementById('mus-mode').value, g, tr='';
+  if(mode==='auto'){ tr=_mus.track; g=MUS_TRACK_GROUP[tr]||MUS_SCENE_GROUP[_mus.scene]||'hub'; }
+  else g=mode;
+  if(tr&&(_mus.map[tr]||[]).length) return {key:tr,ids:_mus.map[tr],label:(MUS_GROUPS.find(function(x){return x.id===g;}).tracks.find(function(t){return t[0]===tr;})||[0,tr])[1]};
+  var chain=MUS_CHAIN[g]||[g];
+  for(var i=0;i<chain.length;i++){
+    var ids=_musGroupIds(chain[i]);
+    if(ids.length) return {key:'all:'+chain[i],ids:ids,label:MUS_GROUPS.find(function(x){return x.id===chain[i];}).label};
+  }
+  return {key:'',ids:[],label:''};
+}
+
+// Ordem aleatória por conjunto, sem repetir até tocar todas
+function _musPick(key,ids){
   if(!ids.length) return null;
-  if(!_mus.order[list]||_mus.pos[list]>=_mus.order[list].length){
+  if(_mus.seq){
+    var p=ids.indexOf(_mus.playing);
+    if(_mus.playingKey!==key||p<0) p=typeof _mus.pos['s:'+key]==='number'?_mus.pos['s:'+key]:-1;
+    p=(p+1)%ids.length; _mus.pos['s:'+key]=p;
+    return ids[p];
+  }
+  var ok=_mus.order[key]&&_mus.order[key].length===ids.length;
+  if(!ok||_mus.pos[key]>=_mus.order[key].length){
     var o=ids.slice();
     for(var i=o.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=o[i];o[i]=o[j];o[j]=t;}
     if(o.length>1&&o[0]===_mus.playing){o.push(o.shift());}
-    _mus.order[list]=o; _mus.pos[list]=0;
+    _mus.order[key]=o; _mus.pos[key]=0;
   }
-  return _mus.order[list][_mus.pos[list]++];
+  return _mus.order[key][_mus.pos[key]++];
 }
 
 function _musFade(el,to,ms,done){
@@ -1646,18 +1760,10 @@ function _musFade(el,to,ms,done){
   },50);
 }
 
-function _musTargetList(){
-  var mode=document.getElementById('mus-mode').value;
-  var want=mode==='auto'?(_mus.scene==='menu'?'strategy':_mus.scene):mode;
-  // lista vazia → missão usa Combate e depois Base; as outras usam a que tiver músicas
-  var chain={strategy:['strategy','explore','combat'],explore:['explore','combat','strategy'],combat:['combat','explore','strategy']}[want]||['strategy','explore','combat'];
-  for(var i=0;i<chain.length;i++) if(_mus.lists[chain[i]].length) return chain[i];
-  return want;
-}
-
-async function _musPlayList(list){
-  var id=_musPick(list);
-  if(!id){ document.getElementById('mus-now').textContent='Adiciona músicas às listas para começar.'; return; }
+async function _musPlay(){
+  var T=_musTarget();
+  var id=_musPick(T.key,T.ids);
+  if(!id){ document.getElementById('mus-now').textContent='Escolhe pelo menos uma música para trocar (botão + TROCAR).'; return; }
   var t=await _idbGet('mus:t:'+id);
   if(!t){ return _musNext(); }
   var nextI=1-_mus.cur, old=_mus.els[_mus.cur], nu=_mus.els[nextI];
@@ -1665,18 +1771,18 @@ async function _musPlayList(list){
   _mus.url[nextI]=URL.createObjectURL(t.blob);
   nu.src=_mus.url[nextI]; nu.volume=0; nu.onended=function(){ if(_mus.els[_mus.cur]===nu) _musNext(); };
   try{ await nu.play(); }catch(e){ _musHint('O browser bloqueou o áudio — clica em ▶ LIGAR.'); return; }
-  _mus.cur=nextI; _mus.playing=id; _mus.playingList=list;
+  _mus.cur=nextI; _mus.playing=id; _mus.playingKey=T.key;
   _musFade(nu,_mus.vol,MUS_FADE_MS);
   if(!old.paused) _musFade(old,0,MUS_FADE_MS,function(){old.pause();});
-  document.getElementById('mus-now').textContent='♪ '+t.name+'  ·  '+({strategy:'Menu / Base',explore:'Missão',combat:'Combate'}[list]);
+  document.getElementById('mus-now').textContent='♪ '+t.name+'  ·  '+T.label;
   _musRender();
 }
 
-function _musNext(){ if(_mus.on) _musPlayList(_musTargetList()); }
+function _musNext(){ if(_mus.on) _musPlay(); }
 
 function _musStop(){
   _mus.els.forEach(function(el){ _musFade(el,0,800,function(){el.pause();}); });
-  _mus.playing=null;
+  _mus.playing=null; _mus.playingKey='';
   document.getElementById('mus-now').textContent='—';
   _musRender();
 }
@@ -1685,13 +1791,13 @@ function _musSceneLabel(){
   var el=document.getElementById('mus-scene');
   if(!_mus.on){el.textContent='desligada';return;}
   if(document.getElementById('mus-mode').value!=='auto'){el.textContent='modo manual';return;}
-  el.textContent=!_mus.gameAlive?'à espera do jogo…':(MUS_SCENE_LABEL[_mus.scene]||_mus.scene);
+  el.textContent=!_mus.gameAlive?'à espera do jogo…':(MUS_SCENE_LABEL[_mus.scene]||_mus.scene)+(_mus.track?' · '+_mus.track:'');
 }
 
 // Lê a cena escrita pelo mod (só se a pasta do jogo já estiver autorizada — nunca abre diálogos aqui)
 async function _musPoll(){
   if(!_mus.on) return;
-  var scene=null;
+  var scene=null, track='';
   if(_modsDir){
     try{
       if(await _modsDir.queryPermission({mode:'readwrite'})==='granted'){
@@ -1700,15 +1806,15 @@ async function _musPoll(){
           var d=JSON.parse(txt);
           var alive=(Date.now()/1000-(d.ts||0))<40;
           _mus.gameAlive=alive;
-          if(alive) scene=MUS_SCENE_LABEL[d.scene]?d.scene:'strategy';
+          if(alive){ scene=MUS_SCENE_LABEL[d.scene]?d.scene:'strategy'; track=MUS_TRACK_GROUP[d.track]?d.track:''; }
         }else _mus.gameAlive=false;
         await _musCtrl();
       }
     }catch(e){}
   }
-  if(scene&&scene!==_mus.scene){
-    _mus.scene=scene;
-    if(document.getElementById('mus-mode').value==='auto'&&_musTargetList()!==_mus.playingList) _musNext();
+  if(scene&&(scene!==_mus.scene||track!==_mus.track)){
+    _mus.scene=scene; _mus.track=track;
+    if(document.getElementById('mus-mode').value==='auto'&&_musTarget().key!==_mus.playingKey) _musNext();
   }
   _musSceneLabel();
 }
@@ -1731,7 +1837,7 @@ async function _musToggle(){
   }
   _musSceneLabel();
   _musCtrl(true);
-  _musPlayList(_musTargetList());
+  _musPlay();
 }
 
 // Silenciar a música original: o mod lê mp_music.json e chama SetMusicVolume(0) dentro do jogo.
@@ -1749,10 +1855,11 @@ async function _musCtrl(force){
 
 document.getElementById('mus-play').addEventListener('click',_musToggle);
 document.getElementById('mus-next').addEventListener('click',_musNext);
-document.getElementById('mus-mode').addEventListener('change',function(){_musSceneLabel();if(_mus.on&&_musTargetList()!==_mus.playingList)_musNext();});
+document.getElementById('mus-mode').addEventListener('change',function(){_musSceneLabel();if(_mus.on&&_musTarget().key!==_mus.playingKey)_musNext();});
 document.getElementById('mus-vol').addEventListener('input',function(){
   _mus.vol=this.value/100; var el=_mus.els[_mus.cur]; if(!el._fade) el.volume=_mus.vol; _idbSet('mus:vol',_mus.vol);
 });
+document.getElementById('mus-seq').addEventListener('change',function(){_mus.seq=this.value==='seq';_idbSet('mus:seq',_mus.seq);_mus.order={};_musRender();});
 document.getElementById('mus-mute').addEventListener('change',function(){_idbSet('mus:mute',this.checked);_musCtrl(true);});
 setInterval(_musPoll,3000);
 _musLoad();

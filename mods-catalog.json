@@ -22,7 +22,7 @@
    "type": "lua-files",
    "options": [
     {
-     "label": "v0.5",
+     "label": "v0.6",
      "files": {
       "ZeroCompanyMP/Scripts/main.lua": "/ue4ss_mods/ZeroCompanyMP/main.lua"
      }

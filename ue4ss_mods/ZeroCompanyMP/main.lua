@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.4
+-- ZeroCompanyMP/main.lua — v0.6
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -331,7 +331,7 @@ ExecuteWithDelay(3000, function()
 end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.5 carregado")
+print(" ZeroCompanyMP v0.6 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -344,6 +344,7 @@ local SCENE_FILE   = MOD_PATH .. "\\mp_scene.json"
 local last_scene   = ""
 local last_map     = ""
 local last_scene_t = 0
+local last_track   = ""
 
 local function current_map()
     local ok, name = pcall(function()
@@ -358,11 +359,74 @@ end
 local MUSIC_TYPES = { [1] = "menu", [2] = "strategy", [3] = "explore", [4] = "combat" }
 local game_music  = ""
 
+-- Faixa exata: as playlists (MusicPlaylistAsset) guardam um Cooldown_Counter por faixa; depois de o jogo
+-- escolher a música, a faixa escolhida é a única cujo contador muda para o limite (fica em "cooldown").
+local game_track = ""
+local track_snap = {}
+
+local function track_name(sw)
+    local ok, n = pcall(function() return sw:GetFName():ToString() end)
+    if not ok or not n then return nil end
+    return n:match("%-(.+)$") or n
+end
+
+local function scan_tracks()
+    local snap = {}
+    local list = FindAllOf("MusicPlaylistAsset")
+    if not list then return snap end
+    for _, a in ipairs(list) do
+        local an = a:GetFName():ToString()
+        for _, field in ipairs({ "CombatMusicPlaylists", "ExploreMusicPlaylists" }) do
+            pcall(function()
+                a[field]:ForEach(function(i, pl)
+                    pl:get().MusicPlaylist:ForEach(function(j, tr)
+                        local t = tr:get()
+                        local nm = track_name(t.MusicTrackSwitch)
+                        if nm then snap[an .. field .. i .. "." .. j] = { name = nm, c = t.Cooldown_Counter, th = t.Cooldown_Threshold } end
+                    end)
+                end)
+            end)
+        end
+    end
+    return snap
+end
+
+local function pick_changed_track()
+    local now = scan_tracks()
+    local found, many = nil, false
+    for k, v in pairs(now) do
+        local o = track_snap[k]
+        if o and o.c ~= v.c then
+            print(("[ZeroCompanyMP] Faixa %s: cooldown %s -> %s (limite %s)"):format(v.name, tostring(o.c), tostring(v.c), tostring(v.th)))
+            if v.c == v.th or (o.c == 0 and v.c > 0) then
+                if found and found ~= v.name then many = true end
+                found = v.name
+            end
+        end
+    end
+    track_snap = now
+    if found and not many then return found end
+    return nil
+end
+
 pcall(function()
     RegisterHook("/Script/BitReactorGame.BrunoMusicSubSystem:PlayBrunoMusic",
         function(_self, _player, music_type)
             local ok, v = pcall(function() return music_type:get() end)
-            if ok and MUSIC_TYPES[v] then game_music = MUSIC_TYPES[v] end
+            if ok and MUSIC_TYPES[v] then
+                game_music = MUSIC_TYPES[v]
+                if v == 1 then game_track = "Shell_01" elseif v == 2 then game_track = "" end
+                if v == 3 or v == 4 then pcall(function() track_snap = scan_tracks() end) end
+            end
+        end,
+        function(_self, _player, music_type)
+            -- pós-chamada: o jogo já escolheu a faixa
+            local ok, v = pcall(function() return music_type:get() end)
+            if ok and (v == 3 or v == 4) then
+                local okp, nm = pcall(pick_changed_track)
+                game_track = (okp and nm) or ""
+                print("[ZeroCompanyMP] Musica do jogo: " .. tostring(MUSIC_TYPES[v]) .. " / " .. (game_track ~= "" and game_track or "?"))
+            end
         end)
     print("[ZeroCompanyMP] Hook PlayBrunoMusic: OK")
 end)
@@ -416,11 +480,11 @@ local function update_scene()
     local ok, scene, map = pcall(detect_scene)
     if not ok then return end
     -- reescreve a cada 10s mesmo sem mudanças (o portal usa o ts para saber se o jogo está vivo)
-    if scene == last_scene and map == last_map and now - last_scene_t < 10 then return end
+    if scene == last_scene and map == last_map and game_track == last_track and now - last_scene_t < 10 then return end
     if scene ~= last_scene then print("[ZeroCompanyMP] Cena: " .. scene .. " (" .. map .. ")") end
-    last_scene, last_map, last_scene_t = scene, map, now
+    last_scene, last_map, last_scene_t, last_track = scene, map, now, game_track
     local safe_map = map:gsub("\\", "/"):gsub('"', "")
-    write_file(SCENE_FILE, ('{"scene":"%s","map":"%s","ts":%d}'):format(scene, safe_map, now))
+    write_file(SCENE_FILE, ('{"scene":"%s","track":"%s","map":"%s","ts":%d}'):format(scene, game_track, safe_map, now))
 end
 
 local scene_tick = 0
