@@ -1228,37 +1228,26 @@ async def main():
         )
 
 def _windows_setup():
-    """Auto-registar protocolo swmp:// e arranque automático no login.
+    """Registar protocolo swmp:// para que o browser possa lançar o servidor.
     Executado apenas quando corre como .exe compilado (frozen).
     Silencioso — não necessita de admin."""
     if os.name != "nt":
         return
-    exe = sys.executable  # caminho do .exe compilado
+    exe = sys.executable
     flag = Path(exe).parent / ".swmp_registered"
     if flag.exists():
-        return  # já registado
+        return
     try:
         import winreg
-        # Protocolo swmp://
-        for key_path, value in [
-            (r"Software\Classes\swmp",               "URL:SWMP Protocol"),
-            (r"Software\Classes\swmp",               None),  # placeholder
-            (r"Software\Classes\swmp\shell\open\command", f'"{exe}" "%1"'),
-        ]:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as k:
-                if value and value.startswith('"'):
-                    winreg.SetValueEx(k, "", 0, winreg.REG_SZ, value)
-                elif value == "URL:SWMP Protocol":
-                    winreg.SetValueEx(k, "", 0, winreg.REG_SZ, value)
-                    winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
-        # Arranque automático no login (sem admin)
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Run",
-                            0, winreg.KEY_SET_VALUE) as k:
-            winreg.SetValueEx(k, "ZeroCompanyMP", 0, winreg.REG_SZ, f'"{exe}"')
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\swmp") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:SWMP Protocol")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\Classes\swmp\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, f'"{exe}" "%1"')
         flag.write_text("ok")
     except Exception:
-        pass  # sem admin → tenta na próxima vez
+        pass
 
 
 def _ensure_single_instance():
