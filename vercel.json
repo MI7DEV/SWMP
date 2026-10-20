@@ -1,53 +1,17 @@
 {
-  "version": 2,
   "functions": {
     "api/**/*.js": {
       "memory": 128,
-      "maxDuration": 15
+      "maxDuration": 300
     }
   },
-  "routes": [
-    {
-      "src": "/api/nexus/installed",
-      "dest": "/api/nexus-installed.js"
-    },
-    {
-      "src": "/api/config",
-      "dest": "/api/config.js"
-    },
-    {
-      "src": "/api/info",
-      "dest": "/api/info.js"
-    },
-    {
-      "src": "/api/health",
-      "dest": "/api/health.js"
-    },
-    {
-      "src": "/client",
-      "dest": "/client.html"
-    },
-    {
-      "src": "/host",
-      "dest": "/host.html"
-    },
-    {
-      "src": "/mods-catalog.json",
-      "headers": {
-        "Cache-Control": "public, max-age=300"
-      },
-      "dest": "/mods-catalog.json"
-    },
-    {
-      "src": "/mods/(.*\\.zip)",
-      "headers": {
-        "Cache-Control": "public, max-age=86400"
-      },
-      "dest": "/mods/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
+  "rewrites": [
+    { "source": "/api/nexus/installed", "destination": "/api/nexus-installed" },
+    { "source": "/client", "destination": "/client.html" },
+    { "source": "/host", "destination": "/host.html" }
+  ],
+  "headers": [
+    { "source": "/mods-catalog.json", "headers": [{ "key": "Cache-Control", "value": "private, max-age=300" }] },
+    { "source": "/mods/(.*\\.zip)", "headers": [{ "key": "Cache-Control", "value": "private, max-age=86400" }] }
   ]
 }

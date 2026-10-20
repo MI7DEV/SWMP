@@ -297,6 +297,297 @@
    "rank": 7
   },
   {
+   "id": "better-bonding",
+   "name": "Better Bonding",
+   "desc": "Vínculos sobem mais rápido, recompensas melhores e eventos de vínculo sem limite.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Completo",
+     "url": "/api/files?f=BetterBonding.zip",
+     "size": 25543
+    },
+    {
+     "label": "Completo + Cantina x2",
+     "url": "/api/files?f=BetterBonding_CantinaX2.zip",
+     "size": 32922
+    },
+    {
+     "label": "Completo + Cantina x4",
+     "url": "/api/files?f=BetterBonding_CantinaX4.zip",
+     "size": 32926
+    }
+   ],
+   "rank": 8
+  },
+  {
+   "id": "aftermath",
+   "name": "Aftermath Redux DLC (nova campanha)",
+   "desc": "Campanha nova pós-jogo com novos mapas, chefes, especializações e heróis (Cody, Kix, Mace). Começa um jogo novo de Endgame depois de instalar.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Português",
+     "url": "/api/files?f=AftermathRedux-14.4.3-PT.zip",
+     "size": 405839285
+    },
+    {
+     "label": "English",
+     "url": "/api/files?f=AftermathRedux-14.4.3-EN.zip",
+     "size": 376837825
+    }
+   ],
+   "rank": 9
+  },
+  {
+   "id": "better-camera",
+   "name": "Better Camera",
+   "desc": "Câmara com mais zoom, inclinação e liberdade.",
+   "type": "lua",
+   "options": [
+    {
+     "label": "v1.3.1",
+     "url": "/api/files?f=BetterCamera-1.3.1.zip",
+     "size": 3786
+    }
+   ],
+   "rank": 10
+  },
+  {
+   "id": "mission-tweaks",
+   "name": "Mission Tweaks (HoloTable)",
+   "desc": "Missões do HoloTable duram mais ou nunca expiram (inclui as de companheiros).",
+   "type": "game",
+   "options": [
+    {
+     "label": "Nunca expiram",
+     "url": "/api/files?f=MissionTweaks_NeverExpire.zip",
+     "size": 47487
+    },
+    {
+     "label": "Duração 2x",
+     "url": "/api/files?f=MissionTweaks_2xDuration.zip",
+     "size": 47022
+    }
+   ],
+   "rank": 11
+  },
+  {
+   "id": "expanded-customization",
+   "name": "Expanded Wardrobe & Customization",
+   "desc": "Muito mais roupas, armaduras e cores na personalização.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Completo",
+     "url": "/api/files?f=ExpandedCustomization-2.4.5-Full.zip",
+     "size": 6798237
+    },
+    {
+     "label": "Recompensas originais",
+     "url": "/api/files?f=ExpandedCustomization-2.4.5-VanillaRewards.zip",
+     "size": 6798229
+    }
+   ],
+   "rank": 12
+  },
+  {
+   "id": "cheat-menu",
+   "name": "UE4SS Cheat Menu",
+   "desc": "Menu de batota dentro do jogo (créditos, recursos, etc.).",
+   "type": "lua",
+   "options": [
+    {
+     "label": "v1.0.6",
+     "url": "/api/files?f=CheatMenu-1.0.6.zip",
+     "size": 72480
+    }
+   ],
+   "rank": 13
+  },
+  {
+   "id": "stronger-force",
+   "name": "Stronger with the Force",
+   "desc": "Jedi mais fortes — escolhe a forma de combate com sabre.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Equilibrado",
+     "url": "/api/files?f=StrongerWithTheForce_Balanced.zip",
+     "size": 28423
+    },
+    {
+     "label": "Mais forte",
+     "url": "/api/files?f=StrongerWithTheForce_More.zip",
+     "size": 28419
+    },
+    {
+     "label": "Menos forte",
+     "url": "/api/files?f=StrongerWithTheForce_Less.zip",
+     "size": 26831
+    },
+    {
+     "label": "Juyo",
+     "url": "/api/files?f=StrongerWithTheForce_Juyo.zip",
+     "size": 6370
+    },
+    {
+     "label": "Shii-Cho",
+     "url": "/api/files?f=StrongerWithTheForce_ShiiCho.zip",
+     "size": 18834
+    },
+    {
+     "label": "Makashi",
+     "url": "/api/files?f=StrongerWithTheForce_Makashi.zip",
+     "size": 11879
+    },
+    {
+     "label": "Ataru",
+     "url": "/api/files?f=StrongerWithTheForce_Ataru.zip",
+     "size": 21510
+    },
+    {
+     "label": "Soresu",
+     "url": "/api/files?f=StrongerWithTheForce_Soresu.zip",
+     "size": 31566
+    },
+    {
+     "label": "Niman",
+     "url": "/api/files?f=StrongerWithTheForce_Niman.zip",
+     "size": 50806
+    }
+   ],
+   "rank": 14
+  },
+  {
+   "id": "curvier-clothes",
+   "name": "MD's Curvier Clothes",
+   "desc": "Calças e tops com novo corte para personagens femininas.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v3",
+     "url": "/api/files?f=MDsCurvierClothes-3.zip",
+     "size": 75301998
+    }
+   ],
+   "rank": 15
+  },
+  {
+   "id": "target-stats",
+   "name": "Target Stats Always Visible",
+   "desc": "Estatísticas do alvo sempre visíveis.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1.0",
+     "url": "/api/files?f=TargetStatsAlwaysOn.zip",
+     "size": 88599
+    }
+   ],
+   "rank": 16
+  },
+  {
+   "id": "cheaper-skills",
+   "name": "Cheaper Skills",
+   "desc": "Habilidades mais baratas.",
+   "type": "game",
+   "options": [
+    {
+     "label": "1 ponto por habilidade",
+     "url": "/api/files?f=CheaperSkills_1Point.zip",
+     "size": 4934
+    },
+    {
+     "label": "Custo -50%",
+     "url": "/api/files?f=CheaperSkills_50pct.zip",
+     "size": 5027
+    }
+   ],
+   "rank": 17
+  },
+  {
+   "id": "curvier-jae",
+   "name": "MD Curvier Jae",
+   "desc": "Novo visual para a Jae.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Só a Jae",
+     "url": "/api/files?f=MDCurvierJae-2.3.zip",
+     "size": 6066740
+    },
+    {
+     "label": "+ roupa da Jae para todos",
+     "url": "/api/files?f=MDCurvierJae-2.3_OutfitForEveryone.zip",
+     "size": 6075641
+    }
+   ],
+   "rank": 18
+  },
+  {
+   "id": "new-faces",
+   "name": "MD's New Faces",
+   "desc": "Rostos novos na criação de personagens.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1.4",
+     "url": "/api/files?f=MDsNewFaces-1.4.zip",
+     "size": 76747291
+    }
+   ],
+   "rank": 19
+  },
+  {
+   "id": "dual-dc17",
+   "name": "Expanded Armory — Dual DC-17",
+   "desc": "Pistolas DC-17 duplas e armas extra.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1.3.0",
+     "url": "/api/files?f=ExpandedArmory-DualDC17-1.3.0.zip",
+     "size": 397816
+    }
+   ],
+   "rank": 20
+  },
+  {
+   "id": "fight-harder",
+   "name": "Fight Harder",
+   "desc": "Mais inimigos e/ou inimigos mais duros.",
+   "type": "lua",
+   "options": [
+    {
+     "label": "Inimigos mais duros",
+     "url": "/api/files?f=FightHarder_harder-enemies.zip",
+     "size": 4899
+    },
+    {
+     "label": "Inimigos ainda mais duros",
+     "url": "/api/files?f=FightHarder_even-harder-enemies.zip",
+     "size": 4911
+    },
+    {
+     "label": "+50% inimigos",
+     "url": "/api/files?f=FightHarder_more-enemies-150.zip",
+     "size": 4822
+    },
+    {
+     "label": "2x inimigos",
+     "url": "/api/files?f=FightHarder_more-enemies-200.zip",
+     "size": 4812
+    },
+    {
+     "label": "Inimigos com metade da vida",
+     "url": "/api/files?f=FightHarder_half-health-enemies.zip",
+     "size": 4919
+    }
+   ],
+   "rank": 21
+  },
+  {
    "id": "cheaper-actions",
    "name": "Cheaper Actions",
    "desc": "Ações mais baratas em pontos de ação.",
@@ -312,6 +603,67 @@
    "rank": 22
   },
   {
+   "id": "free-refresh",
+   "name": "Free Blackmarket Refresh",
+   "desc": "Atualizar a loja do mercado negro é grátis.",
+   "type": "lua",
+   "options": [
+    {
+     "label": "v1",
+     "url": "/api/files?f=FreeShopRefresh.zip",
+     "size": 1141
+    }
+   ],
+   "rank": 23
+  },
+  {
+   "id": "faster-loading",
+   "name": "Faster Loading",
+   "desc": "Carregamentos e arranque mais rápidos (sem \"press any key\").",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1.0",
+     "url": "/api/files?f=FasterLoading.zip",
+     "size": 33095
+    }
+   ],
+   "rank": 24
+  },
+  {
+   "id": "recruitable",
+   "name": "All Heroes Recruitable",
+   "desc": "Recruta qualquer inimigo como operacional.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Inimigos recrutáveis",
+     "url": "/api/files?f=Recruitable-5.2.1.zip",
+     "size": 802406
+    },
+    {
+     "label": "Inimigos + heróis",
+     "url": "/api/files?f=Recruitable-5.2.1_WithHeroes.zip",
+     "size": 664965
+    }
+   ],
+   "rank": 25
+  },
+  {
+   "id": "both-slots",
+   "name": "Get Both Slots From Campaign",
+   "desc": "Recebe as duas recompensas de slot das operações.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1",
+     "url": "/api/files?f=GetBothSlots.zip",
+     "size": 3813
+    }
+   ],
+   "rank": 26
+  },
+  {
    "id": "more-contacts",
    "name": "More Contacts",
    "desc": "Mais contactos.",
@@ -322,6 +674,20 @@
      "url": "/mods/StarWarsZeroCompany_MoreContacts_v1.0.zip",
      "size": 1122,
      "mirror": "https://618b31e8.delivery.rocketcdn.me/wp-content/uploads/2026/09/StarWarsZeroCompany_MoreContacts_v1.0.zip"
+    }
+   ],
+   "rank": 28
+  },
+  {
+   "id": "ui-fix-respec",
+   "name": "UI Fix Respec",
+   "desc": "Corrige a interface de redistribuir pontos.",
+   "type": "lua",
+   "options": [
+    {
+     "label": "v1.1",
+     "url": "/api/files?f=UIFixRespec-1.1.zip",
+     "size": 10794
     }
    ],
    "rank": 28
@@ -355,6 +721,20 @@
     }
    ],
    "rank": 31
+  },
+  {
+   "id": "delta-squad",
+   "name": "Accurate Clone Commando — Delta Squad",
+   "desc": "Esquadrão Delta (comandos clone) com visual fiel.",
+   "type": "game",
+   "options": [
+    {
+     "label": "v1",
+     "url": "/api/files?f=DeltaSquad-1.zip",
+     "size": 309591766
+    }
+   ],
+   "rank": 32
   },
   {
    "id": "fast-resonance",
