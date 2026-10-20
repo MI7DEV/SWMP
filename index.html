@@ -312,11 +312,17 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     </div>
   </div>
 
-  <!-- Client mode banner (shown when server not found locally) -->
-  <div id="client-banner" style="display:none;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:14px 18px;margin-bottom:20px">
-    <div style="font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.12em;color:#60a5fa;text-transform:uppercase;margin-bottom:6px">Modo Cliente</div>
-    <div style="font-size:13px;color:var(--fg2)">Servidor local não detectado nesta máquina. Use o link enviado pelo host para conectar — ou clica em <strong style="color:var(--fg)">ENTRAR COMO CLIENTE</strong> abaixo.</div>
+  <!-- Painel de instalação / arranque (substitui client-banner) -->
+  <div id="host-install-panel" style="display:none;border-radius:10px;padding:20px 24px;margin-bottom:20px;background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.25)">
+    <div style="font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--gold);margin-bottom:12px">⚔ TORNAR-ME ANFITRIÃO</div>
+    <div id="hip-status" style="font-size:13px;color:var(--fg2);margin-bottom:16px">A verificar se o SWMP Host está instalado...</div>
+    <div id="hip-btns" style="display:flex;flex-wrap:wrap;gap:10px">
+      <button id="hip-launch" onclick="_hipLaunch()" style="display:none;padding:10px 20px;background:rgba(245,197,24,.15);border:1px solid var(--gold);border-radius:6px;color:var(--gold);font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.05em">▶ INICIAR SERVIDOR</button>
+      <a id="hip-download" href="https://github.com/MI7DEV/SWMP/releases/latest/download/SWMP-Host.exe" style="display:none;padding:10px 20px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.5);border-radius:6px;color:#4ade80;font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.05em;text-decoration:none">⬇ INSTALAR SWMP HOST (uma vez)</a>
+    </div>
+    <div id="hip-hint" style="display:none;font-size:11px;color:var(--fg2);margin-top:10px">Após instalar: clica em <strong style="color:var(--fg)">INICIAR SERVIDOR</strong>. Na próxima vez que ligares o PC, arranca automaticamente.</div>
   </div>
+  <div id="client-banner" style="display:none"></div>
 
   <div id="status-panel" style="display:none">
     <h3>Estado do Servidor Local</h3>
@@ -609,10 +615,10 @@ document.getElementById('btn-host').addEventListener('click',function(){
         })
         .catch(function(){
           if(hcs&&hct){
-            hcs.style.background='rgba(239,68,68,.08)';hcs.style.borderColor='rgba(239,68,68,.3)';hcs.style.color='#fca5a5';
-            hct.innerHTML='Servidor offline &mdash; <button id="btn-start-srv" onclick="_triggerSwmpStart()" style="background:rgba(245,197,24,.15);border:1px solid var(--gold);border-radius:4px;color:var(--gold);padding:2px 10px;cursor:pointer;font-size:11px;font-weight:700;vertical-align:middle">&#9889; INICIAR</button>';
+            hcs.style.display='none';
           }
-          _triggerSwmpStart();
+          panel.style.display='none';
+          _hipShow();
         });
     });
 });
@@ -853,17 +859,62 @@ function enterClientMode(){
   if(_modeSet) return;
   _modeSet=true;_isHost=false;
   document.getElementById('status-panel').style.display='none';
-  // Stop polling — no server here
   if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
-  // Show Nexus API status in header dot
   srvDot.className='dot pulse';srvLabel.textContent='A verificar...';
   fetch('/api/health').then(function(r){return r.json();}).then(function(h){
-    if(h.ok){
-      srvDot.className='dot green';srvLabel.textContent='Nexus Online';
-    }else{
-      srvDot.className='dot red';srvLabel.textContent='Nexus Offline';
-    }
+    if(h.ok){srvDot.className='dot green';srvLabel.textContent='Nexus Online';}
+    else{srvDot.className='dot red';srvLabel.textContent='Nexus Offline';}
   }).catch(function(){srvDot.className='dot';srvLabel.textContent='Nexus';});
+}
+
+// ── Painel de instalação do Host ──
+var _hipPolling=false;
+function _hipShow(){
+  var panel=document.getElementById('host-install-panel');
+  if(panel) panel.style.display='block';
+  // Tenta swmp:// silenciosamente e aguarda 4s
+  _hipTryLaunch(true);
+}
+function _hipTryLaunch(silent){
+  if(_hipPolling) return;
+  _hipPolling=true;
+  var st=document.getElementById('hip-status');
+  var launch=document.getElementById('hip-launch');
+  var dl=document.getElementById('hip-download');
+  var hint=document.getElementById('hip-hint');
+  if(st) st.textContent='A tentar iniciar servidor local...';
+  // Dispara swmp://start
+  try{var a=document.createElement('a');a.href='swmp://start';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){try{document.body.removeChild(a);}catch(e){}},200);}catch(e){}
+  // Poll por 6s
+  var att=0;
+  var t=setInterval(function(){
+    att++;
+    fetch('http://localhost:8766/api/info',{signal:AbortSignal.timeout(1000)})
+      .then(function(r){return r.json();})
+      .then(function(){
+        clearInterval(t);_hipPolling=false;
+        // Servidor encontrado — recarregar para modo host
+        location.reload();
+      })
+      .catch(function(){
+        if(att>=4){
+          clearInterval(t);_hipPolling=false;
+          // Não arrancou — mostrar opções
+          if(st) st.textContent='SWMP Host não encontrado nesta máquina.';
+          if(launch){launch.style.display='inline-block';}
+          if(dl){dl.style.display='inline-block';}
+          if(hint){hint.style.display='block';}
+        }
+      });
+  },1500);
+}
+function _hipLaunch(){
+  var launch=document.getElementById('hip-launch');
+  var st=document.getElementById('hip-status');
+  if(launch){launch.textContent='A iniciar...';launch.disabled=true;}
+  if(st) st.textContent='A tentar iniciar servidor local...';
+  _hipPolling=false;
+  _hipTryLaunch(false);
 }
 
 function pollStatus(){

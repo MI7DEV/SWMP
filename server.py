@@ -5,7 +5,7 @@ HOST  → http://localhost:8766
 AMIGO → http://<IP_DO_HOST>:8766
 """
 
-import asyncio, json, socket, subprocess, time, threading, shutil, io
+import asyncio, json, socket, subprocess, time, threading, shutil, io, sys
 import urllib.request, urllib.error, urllib.parse, zipfile, base64, os, re
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -1227,5 +1227,57 @@ async def main():
             watch_explorer(), watch_game(), watch_sync_out(), watch_downloads()
         )
 
+def _windows_setup():
+    """Auto-registar protocolo swmp:// e arranque automático no login.
+    Executado apenas quando corre como .exe compilado (frozen).
+    Silencioso — não necessita de admin."""
+    if os.name != "nt":
+        return
+    exe = sys.executable  # caminho do .exe compilado
+    flag = Path(exe).parent / ".swmp_registered"
+    if flag.exists():
+        return  # já registado
+    try:
+        import winreg
+        # Protocolo swmp://
+        for key_path, value in [
+            (r"Software\Classes\swmp",               "URL:SWMP Protocol"),
+            (r"Software\Classes\swmp",               None),  # placeholder
+            (r"Software\Classes\swmp\shell\open\command", f'"{exe}" "%1"'),
+        ]:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as k:
+                if value and value.startswith('"'):
+                    winreg.SetValueEx(k, "", 0, winreg.REG_SZ, value)
+                elif value == "URL:SWMP Protocol":
+                    winreg.SetValueEx(k, "", 0, winreg.REG_SZ, value)
+                    winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        # Arranque automático no login (sem admin)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Run",
+                            0, winreg.KEY_SET_VALUE) as k:
+            winreg.SetValueEx(k, "ZeroCompanyMP", 0, winreg.REG_SZ, f'"{exe}"')
+        flag.write_text("ok")
+    except Exception:
+        pass  # sem admin → tenta na próxima vez
+
+
+def _ensure_single_instance():
+    """Impede múltiplas instâncias do servidor."""
+    import socket as _s
+    try:
+        _lock = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
+        _lock.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 0)
+        _lock.bind(("127.0.0.1", 18766))  # porta de lock interna
+        _lock.listen(1)
+        return _lock  # manter referência para não fechar
+    except OSError:
+        return None  # já está a correr
+
+
 if __name__ == "__main__":
+    if getattr(sys, "frozen", False):
+        _windows_setup()
+        lock = _ensure_single_instance()
+        if lock is None:
+            sys.exit(0)  # já está a correr — sair silenciosamente
     asyncio.run(main())
