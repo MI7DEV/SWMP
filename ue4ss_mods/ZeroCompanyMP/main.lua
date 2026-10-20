@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.15
+-- ZeroCompanyMP/main.lua — v0.16
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.15 carregado")
+print(" ZeroCompanyMP v0.16 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -893,6 +893,43 @@ local function pvp_select_side()
     end
 end
 
+-- Câmara: cada jogador vê por trás das suas unidades, virado para o inimigo. A câmara tática (Camroid) não
+-- aceita BitReactorGameStatics_Camera:SetCameraYaw (devolve false); roda-se injetando a ação de rodar do próprio
+-- jogo (IA_RotateCamera, a das teclas Q/E) frame a frame até o ângulo ficar a menos de 5° do alvo (~3°/frame).
+local function cam_yaw()
+    for _, m in ipairs(FindAllOf("PlayerCameraManager") or {}) do
+        if valid(m) and not m:GetFullName():find("Default__") then
+            local ok, r = pcall(function() return m:GetCameraRotation() end)
+            if ok and r then return r.Yaw end
+        end
+    end
+end
+
+local function norm180(a) a = (a + 180) % 360; if a < 0 then a = a + 360 end; return a - 180 end
+
+local cam_job = 0
+local function cam_face(target)
+    local ia = StaticFindObject("/Game/Game/Input/Actions/IA_RotateCamera.IA_RotateCamera")
+    local sub
+    for _, x in ipairs(FindAllOf("EnhancedInputLocalPlayerSubsystem") or {}) do if valid(x) then sub = x end end
+    if not (valid(ia) and sub) then return end
+    cam_job = cam_job + 1
+    local job, steps = cam_job, 0
+    local function step()
+        in_game_thread(function()
+            if job ~= cam_job then return end            -- um pedido mais recente substitui este
+            local y = cam_yaw()
+            if not y then return end
+            local d = norm180(target - y)
+            steps = steps + 1
+            if math.abs(d) < 5 or steps > 240 then return end
+            pcall(function() sub:InjectInputVectorForAction(ia, { X = d > 0 and 1.0 or -1.0, Y = 0.0, Z = 0.0 }, {}, {}) end)
+            ExecuteWithDelay(16, step)
+        end)
+    end
+    step()
+end
+
 -- troca as equipas de todas as unidades do jogador/inimigo (guarda o lado original para repor)
 local function pvp_swap(want)
     if want == pvp.swapped then return end
@@ -917,6 +954,9 @@ local function pvp_swap(want)
     if not want then pvp.units = {} end
     print(("[ZeroCompanyMP] Batalha 1x1: %s (%d unidades)"):format(want and "vez do JOGADOR 2" or "vez do JOGADOR 1", n))
     ExecuteWithDelay(1500, function() in_game_thread(pvp_select_side) end)
+    if pvp.yaw1 then
+        ExecuteWithDelay(2500, function() cam_face(want and norm180(pvp.yaw1 + 180) or pvp.yaw1) end)
+    end
 end
 
 -- ao terminar cada turno de jogador alterna o lado (chamado pela UI e pelo portal: RequestEndTurn)
@@ -965,6 +1005,7 @@ local function pvp_set(on)
         if pvp_on then return end
         pvp_hook()
         if not pvp_turn_order(true) then pvp_on = false; pcall(pvp_report); return end
+        pvp.yaw1 = cam_yaw()   -- a orientação do mapa no início = vista do Jogador 1
         pvp_on = true
     else
         pvp_on = false
