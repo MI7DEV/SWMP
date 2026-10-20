@@ -1,8 +1,18 @@
 # SWMP — leitor de música em segundo plano (arrancado pelo mod ZeroCompanyMP).
 # O mod escreve mp_player.json {"file":"C:\\...\\x.mp3","vol":0.7,"seq":N,"ts":N}; este leitor toca com crossfade
 # e escreve mp_player_state.json {"seq":N,"pos":s,"len":s,"ended":bool,"ts":N}. Sai sozinho se o jogo fechar.
-param([string]$Dir, [switch]$NoGameCheck)
+param([string]$Dir, [switch]$NoGameCheck, [switch]$Detached)
 $ErrorActionPreference = 'SilentlyContinue'
+# O jogo mata os processos filhos ao carregar um mapa (o leitor morria ao entrar em combate). Relança-se pelo
+# WMI (pai = serviço WMI, fora do jogo) e esta cópia sai logo; o leitor desliga-se sozinho quando o jogo fecha.
+if (-not $Detached) {
+    $self = $MyInvocation.MyCommand.Path
+    $si = ([wmiclass]'Win32_ProcessStartup').CreateInstance(); $si.ShowWindow = 0
+    $cmdline = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $self + '" -Dir "' + $Dir + '" -Detached'
+    if ($NoGameCheck) { $cmdline += ' -NoGameCheck' }
+    $r = ([wmiclass]'Win32_Process').Create($cmdline, $Dir, $si)
+    if ($r.ReturnValue -eq 0) { exit }
+}
 Add-Type -AssemblyName PresentationCore
 $cmdFile   = Join-Path $Dir 'mp_player.json'
 $stateFile = Join-Path $Dir 'mp_player_state.json'

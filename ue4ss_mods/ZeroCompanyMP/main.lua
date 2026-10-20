@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.13
+-- ZeroCompanyMP/main.lua — v0.15
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.13 carregado")
+print(" ZeroCompanyMP v0.15 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -744,15 +744,17 @@ end
 local scene_tick = 0
 
 -- ─── Batalha 1x1 (PvP hot-seat no PC do anfitrião; o amigo entra por Steam Remote Play Together) ─────
--- Jogador 1 controla o esquadrão; jogador 2 controla o lado inimigo.
--- Usa ferramentas do próprio jogo: BrunoCheatManager:SelectAnyUnit (controlar qualquer unidade),
--- br.AI.Planner.SimulatePlanNoCommit (a IA inimiga planeia mas não age) e TeamGameFlag.bAlwaysWantsControl.
+-- Jogador 1 joga o esquadrão; o Jogador 2 joga o lado inimigo COM a interface nativa (barra do esquadrão, radial,
+-- ataques). Como (testado ao vivo em 20/10): o grupo de turno do jogador (BP_PlayerTurnGroup) passa também a ocupar
+-- o lugar do grupo de IA na ordem dos turnos, e ao "terminar turno" (BP_BrunoGameplayMaster:RequestEndTurn) as
+-- unidades trocam de equipa com BitReactorGameStatics_Unit:ChangeActorTeam (PlayerTeam <-> EnemyTeam). Assim o turno
+-- do Jogador 2 é um turno de jogador normal com os inimigos como "esquadrão". Ao desligar repõe tudo.
 -- Controlo: tecla F8 no jogo, ou o portal escreve mp_pvp_cmd.json {"cmd":"on|off","ts":N}.
 local PVP_CMD    = MOD_PATH .. "\\mp_pvp_cmd.json"
 local PVP_STATE  = MOD_PATH .. "\\mp_pvp.json"
 local pvp_on     = false
 local pvp_cmd_ts = 0
-local pvp_flags  = {}   -- CDOs de TeamGameFlag alterados (para repor)
+local pvp = { swapped = false, units = {}, ai = nil, ai_idx = nil, sub = nil, hooked = false }
 
 -- Só com a cópia original da Steam: manifesto da app na biblioteca Steam e nenhum ficheiro de crack/emulador
 -- (o SWMP-Host ainda verifica a assinatura Valve da steam_api64.dll e o registo da Steam)
@@ -808,25 +810,6 @@ local function pvp_console(cmd)
     print(("[ZeroCompanyMP] PvP consola '%s': %s"):format(cmd, ok and "ok" or tostring(err)))
 end
 
--- Precisa do CheatManager do próprio jogo (BrunoCheatManager); o CheatManagerEnablerMod cria um genérico
-local function pvp_cheat()
-    local pc = pvp_pc()
-    if not pc then return nil end
-    local ok, cm = pcall(function() return pc.CheatManager end)
-    local is_bruno = ok and valid(cm) and cm:GetClass():GetFName():ToString() == "BrunoCheatManager"
-    if is_bruno then return cm end
-    local okc, err = pcall(function()
-        local cls = StaticFindObject("/Script/Bruno.BrunoCheatManager")
-        local nc = StaticConstructObject(cls, pc)
-        pc.CheatManager = nc
-        pcall(function() nc:ReceiveInitCheatManager() end)
-        cm = nc
-    end)
-    print("[ZeroCompanyMP] PvP: BrunoCheatManager " .. (okc and "criado" or ("falhou: " .. tostring(err))))
-    if okc and valid(cm) then return cm end
-    return nil
-end
-
 local function pvp_subsys()
     local l = FindAllOf("TurnGroupSubsystem")
     if l then for _, x in ipairs(l) do if valid(x) then return x end end end
@@ -858,37 +841,115 @@ local function pvp_report()
     local parts = {}
     for _, t in ipairs(out.teams) do parts[#parts + 1] = ('{"group":"%s","flag":"%s"}'):format(t.group, t.flag) end
     check_genuine()
-    write_file(PVP_STATE, ('{"active":%s,"round":%d,"current":"%s","units":%d,"teams":[%s],"genuine":%s,"why":%s,"ts":%d}'):format(
-        tostring(pvp_on), out.round or 0, out.current or "", n, table.concat(parts, ","), tostring(genuine_ok), json.encode(genuine_why), out.ts))
+    write_file(PVP_STATE, ('{"active":%s,"round":%d,"current":"%s","side":%d,"units":%d,"teams":[%s],"genuine":%s,"why":%s,"ts":%d}'):format(
+        tostring(pvp_on), out.round or 0, out.current or "", pvp.swapped and 2 or 1, n, table.concat(parts, ","), tostring(genuine_ok), json.encode(genuine_why), out.ts))
     return out
 end
 
--- Equipas que não são do jogador: marca o CDO da flag como "quer controlo humano"
-local function pvp_flag_control(want)
-    local sub = pvp_subsys()
-    if not sub then return end
+local TEAM_PATH = { P = "/Game/Game/GameData/Teams/PlayerTeam.PlayerTeam_C", E = "/Game/Game/GameData/Teams/EnemyTeam.EnemyTeam_C" }
+local function pvp_statics()
+    return StaticFindObject("/Script/BitReactorGame.Default__BitReactorGameStatics"),
+           StaticFindObject("/Script/BitReactorGame.Default__BitReactorGameStatics_Unit")
+end
+
+local function team_name(st, a)
+    local ok, t = pcall(function() return st:GetTeam(a) end)
+    if ok and valid(t) then return t:GetFName():ToString() end
+    return ""
+end
+
+-- unidades do mapa (não modelos/CDOs fora do nível: selecionar um desses crashou o jogo em 20/10)
+local function level_units()
+    local t = {}
+    for _, c in ipairs(FindAllOf("BitReactorGameCharacter") or {}) do
+        if valid(c) and c:GetFullName():find(":PersistentLevel%.") then t[#t + 1] = c end
+    end
+    return t
+end
+
+local function pvp_groups(sub)
+    local pg, ai, ai_idx
     pcall(function()
         sub.OrderedTurnGroups:ForEach(function(i, g)
             local grp = g:get()
-            local cls
-            pcall(function() cls = grp.TeamGameFlag end)
-            if cls and valid(cls) then
-                local cdo
-                pcall(function() cdo = cls:GetCDO() end)
-                if cdo and valid(cdo) then
-                    local name = cls:GetFName():ToString()
-                    if want then
-                        if pvp_flags[name] == nil then pvp_flags[name] = cdo.bAlwaysWantsControl end
-                        cdo.bAlwaysWantsControl = true
-                    elseif pvp_flags[name] ~= nil then
-                        cdo.bAlwaysWantsControl = pvp_flags[name]
-                    end
-                    print(("[ZeroCompanyMP] PvP equipa %s: bAlwaysWantsControl=%s"):format(name, tostring(cdo.bAlwaysWantsControl)))
-                end
+            if valid(grp) then
+                local n = grp:GetFName():ToString()
+                if n:find("^BP_PlayerTurnGroup") and not pg then pg = grp
+                elseif n:find("^BP_AITurnGroup") then ai, ai_idx = grp, i end
             end
         end)
     end)
-    if not want then pvp_flags = {} end
+    return pg, ai, ai_idx
+end
+
+-- passa a seleção para o lado que vai jogar pelo mesmo caminho da tecla TAB (SelectNextCharacter): só assim a
+-- câmara vai à unidade e o radial/barra de habilidades abre nela (SetSelectedCharacter direto deixava a UI presa)
+local function pvp_select_side()
+    for _, c in ipairs(FindAllOf("SelectedCharacterComponent") or {}) do
+        if valid(c) and c:GetFullName():find("PlayerController") then
+            pcall(function() c:SelectNextCharacter() end)
+            return
+        end
+    end
+end
+
+-- troca as equipas de todas as unidades do jogador/inimigo (guarda o lado original para repor)
+local function pvp_swap(want)
+    if want == pvp.swapped then return end
+    local st, su = pvp_statics()
+    local tp, te = StaticFindObject(TEAM_PATH.P), StaticFindObject(TEAM_PATH.E)
+    if not (valid(st) and valid(su) and valid(tp) and valid(te)) then print("[ZeroCompanyMP] PvP: equipas indisponíveis"); return end
+    if want then
+        pvp.units = {}
+        for _, c in ipairs(level_units()) do
+            local t = team_name(st, c)
+            if t == "PlayerTeam_C" or t == "EnemyTeam_C" then pvp.units[#pvp.units + 1] = { a = c, p = (t == "PlayerTeam_C") } end
+        end
+    end
+    local n = 0
+    for _, u in ipairs(pvp.units) do
+        if valid(u.a) then
+            local to = (u.p == want) and te or tp     -- trocado: jogador->inimigo e inimigo->jogador
+            if pcall(function() su:ChangeActorTeam(u.a, to, true) end) then n = n + 1 end
+        end
+    end
+    pvp.swapped = want
+    if not want then pvp.units = {} end
+    print(("[ZeroCompanyMP] Batalha 1x1: %s (%d unidades)"):format(want and "vez do JOGADOR 2" or "vez do JOGADOR 1", n))
+    ExecuteWithDelay(1500, function() in_game_thread(pvp_select_side) end)
+end
+
+-- ao terminar cada turno de jogador alterna o lado (chamado pela UI e pelo portal: RequestEndTurn)
+local function pvp_hook()
+    if pvp.hooked then return end
+    local ok, err = pcall(function()
+        RegisterHook("/Game/Game/Core/Blueprints/BP_BrunoGameplayMaster.BP_BrunoGameplayMaster_C:RequestEndTurn", function()
+            if not pvp_on then return end
+            local okc, e = pcall(function() pvp_swap(not pvp.swapped) end)
+            if not okc then print("[ZeroCompanyMP] PvP erro na troca: " .. tostring(e)) end
+        end)
+    end)
+    pvp.hooked = ok
+    print("[ZeroCompanyMP] PvP gancho RequestEndTurn: " .. (ok and "OK" or tostring(err)))
+end
+
+-- liga/desliga a ordem de turnos PvP (grupo do jogador no lugar do grupo de IA)
+local function pvp_turn_order(on)
+    local sub = pvp_subsys()
+    if not sub then return false end
+    if on then
+        local pg, ai, ai_idx = pvp_groups(sub)
+        if not (pg and ai and ai_idx) then print("[ZeroCompanyMP] PvP: grupos de turno não encontrados"); return false end
+        pvp.sub, pvp.ai, pvp.ai_idx = sub, ai, ai_idx
+        local ok = pcall(function() sub.OrderedTurnGroups[ai_idx] = pg end)
+        print("[ZeroCompanyMP] PvP: turno inimigo passa a ser do Jogador 2 (" .. (ok and "ok" or "falhou") .. ")")
+        return ok
+    elseif pvp.sub == sub and pvp.ai and valid(pvp.ai) and pvp.ai_idx then
+        pcall(function() sub.OrderedTurnGroups[pvp.ai_idx] = pvp.ai end)
+        print("[ZeroCompanyMP] PvP: turno inimigo devolvido à IA")
+    end
+    pvp.sub, pvp.ai, pvp.ai_idx = nil, nil, nil
+    return true
 end
 
 local function pvp_set(on)
@@ -898,24 +959,32 @@ local function pvp_set(on)
         pcall(pvp_report)
         return
     end
-    pvp_on = on
-    local cm = pvp_cheat()
-    if cm then
-        local ok, err = pcall(function() cm:SelectAnyUnit(on) end)
-        if not ok then ok, err = pcall(function() cm.bSelectAnyUnit = on end) end
-        local now = "?"
-        pcall(function() now = tostring(cm.bSelectAnyUnit) end)
-        print("[ZeroCompanyMP] PvP SelectAnyUnit(" .. tostring(on) .. "): " .. (ok and "ok" or tostring(err)) .. " bSelectAnyUnit=" .. now)
+    -- versões antigas deixavam a IA a planear sem agir: garante que fica desligado
+    pvp_console("br.AI.Planner.SimulatePlanNoCommit 0")
+    if on then
+        if pvp_on then return end
+        pvp_hook()
+        if not pvp_turn_order(true) then pvp_on = false; pcall(pvp_report); return end
+        pvp_on = true
     else
-        print("[ZeroCompanyMP] PvP: CheatManager indisponível (o mod CheatManagerEnablerMod tem de estar ativo)")
+        pvp_on = false
+        pcall(function() pvp_swap(false) end)
+        pcall(function() pvp_turn_order(false) end)
     end
-    pvp_console("br.AI.Planner.SimulatePlanNoCommit " .. (on and "1" or "0"))
-    pvp_flag_control(on)
     print("[ZeroCompanyMP] Batalha 1x1 " .. (on and "LIGADA" or "DESLIGADA"))
     pcall(pvp_report)
 end
 
+-- novo combate/missão (outro TurnGroupSubsystem): o estado antigo já não vale
+local function pvp_check_world()
+    if pvp.sub and not valid(pvp.sub) then
+        pvp.swapped, pvp.units, pvp.sub, pvp.ai, pvp.ai_idx = false, {}, nil, nil, nil
+        if pvp_on then pvp_on = false; print("[ZeroCompanyMP] Batalha 1x1 terminou com a missão") end
+    end
+end
+
 local function pvp_poll()
+    pvp_check_world()
     local raw = read_file(PVP_CMD)
     if raw then
         local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
