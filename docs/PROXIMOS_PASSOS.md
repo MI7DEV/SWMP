@@ -64,6 +64,17 @@
      `TryActivatePlannedAbility(ability, source)` é o caminho da IA; RNG do jogo: `BitReactorRandomStatics` (geradores
      com semente).
    - SWMPDev: cada execução tem ambiente próprio — estado entre execuções só em `_G.X`.
+   - VIDA: `u.AbilitySystemComponent.SpawnedAttributes` → `BitReactorHealthSet.Health` (BaseValue/CurrentValue)
+     lê e escreve bem (testado). MAS pôr 0 não mata; `GE_FixedDamage` (exec `BitReactorDamageDealtExecution`, tag
+     `SetByCaller.Effect.PrimaryMagnitude`) via MakeOutgoingSpec+AssignTagSetByCallerMagnitude+ApplySpecToSelf não
+     causou dano; `GameplayStatics:ApplyDamage` também não. Falta descobrir como matar uma unidade "a sério" (para o
+     host aplicar mortes vindas do cliente) — ou reproduzir a habilidade do cliente no host (host decide tudo).
+   - Ponte entre PCs: o client.html não escreve no jogo do convidado. Plano: o próprio portal (já tem acesso à pasta
+     de mods em cada PC) faz a ponte mod↔rede, ligando os dois portais por WebRTC (PeerJS) com código de sessão.
+   - Plano de reprodução (host decide tudo): cliente captura no K2_EndAbility da sua unidade a classe + posição final
+     + alvo (ler do `BRG_TargetedActorVM` no commit); host: movimento = TeleportActor; ataque =
+     `GetAbilitySpecHandleFromClass` + `SetAITargetingDataOverride(AbilityTargetDataFromActor(alvo))` +
+     `TryActivatePlannedAbility`; depois o host manda o estado (vida/posições/mortos) e o cliente corrige.
    - Modo batalha: desligar o 1x1 (F8) a meio termina o combate (`GA_TacticalEncounterEnded`) — os inimigos do mapa
      foram removidos.
 4. Radial ou barra reta: a opção "Estilo de Seleção de Habilidade" do jogo — testar o J2 com as duas.
