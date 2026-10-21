@@ -368,6 +368,90 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 
 
 
+  <!-- ── Guia: como jogar cada modo, passo a passo ── -->
+  <style>
+    #guide-section details{border:1px solid var(--border);border-radius:8px;background:var(--bg3);margin-top:8px}
+    #guide-section summary{cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:var(--fg);list-style:none;display:flex;align-items:center;gap:8px}
+    #guide-section summary::-webkit-details-marker{display:none}
+    #guide-section summary::after{content:'▸';margin-left:auto;color:var(--fg2);transition:transform .15s}
+    #guide-section details[open] summary::after{transform:rotate(90deg)}
+    #guide-section .g-body{padding:0 16px 14px 16px;font-size:12px;color:var(--fg2);line-height:1.8}
+    #guide-section ol{margin:0 0 0 18px}
+    #guide-section b{color:var(--fg)}
+    #guide-section .g-note{margin-top:8px;padding:8px 10px;border-left:2px solid var(--gold);background:rgba(245,197,24,.05)}
+    #guide-section kbd{font-family:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--fg)}
+  </style>
+  <div id="guide-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px">📘 Como jogar — passo a passo</h2>
+    <p style="font-size:12px;color:var(--fg2);line-height:1.7">Escolhe o modo e segue os passos. As secções de cada modo estão mais abaixo nesta página.</p>
+
+    <details open>
+      <summary>① Antes de tudo (só uma vez)</summary>
+      <div class="g-body"><ol>
+        <li>Tem o <b>jogo original da Steam</b> instalado (cópias não verificadas são recusadas).</li>
+        <li>Usa o <b>Google Chrome</b> ou o <b>Microsoft Edge</b> no PC.</li>
+        <li>Na página <b>MODS</b>, instala o <b>UE4SS</b> e o <b>ZeroCompanyMP</b> (a integração multiplayer).</li>
+        <li>Na primeira vez que carregas num botão, o site pede a <b>pasta do jogo</b>: escolhe <b>Star Wars Zero Company</b> dentro de <b>steamapps\common</b>. Fica guardado.</li>
+        <li>Para jogar com um amigo pela internet usa o <b>Steam Remote Play Together</b>: ele não precisa de ter o jogo e vê/usa o teu jogo.</li>
+      </ol></div>
+    </details>
+
+    <details>
+      <summary>⚡ Batalha Rápida — combate direto, sozinho</summary>
+      <div class="g-body"><ol>
+        <li>Em <b>Batalha Rápida</b>, escolhe o mapa (escaramuças, missões de herói ou da história).</li>
+        <li>Deixa o <b>1x1 desmarcado</b> e carrega em <b>LANÇAR</b>.</li>
+        <li>O jogo abre pela Steam (ou, se já estiver no menu principal, carrega logo) e vai <b>direto para o combate</b> com o esquadrão de testes.</li>
+      </ol>
+      <div class="g-note">Se o jogo abrir direto numa missão antiga (acontece quando foi fechado a meio de um combate), sai para o <b>menu principal</b> e carrega em LANÇAR outra vez.</div></div>
+    </details>
+
+    <details>
+      <summary>⚔ Modo Batalha 1x1 — cada um escolhe a sua equipa</summary>
+      <div class="g-body"><ol>
+        <li>Em <b>Batalha Rápida</b>, escolhe o mapa e marca <b>1x1</b>.</li>
+        <li>Aparece a lista de <b>todas as unidades</b> do jogo (heróis, campanha, droides, clones, Coil, Pyke…). Usa o <b>filtro</b> e o grupo para encontrar.</li>
+        <li>Carrega em <b>+A</b> para pôr na Equipa A (Jogador 1) e <b>+B</b> para a Equipa B (Jogador 2). Podes repetir a mesma unidade; o <b>−</b> tira uma.</li>
+        <li>Carrega em <b>LANÇAR</b>: o jogo abre e vai direto para a batalha com as duas equipas. A Equipa B fica do lado inimigo.</li>
+        <li>No Steam: <b>Shift+Tab → Amigos → (amigo) → Remote Play Together</b>.</li>
+        <li>O <b>Jogador 1</b> joga a Equipa A e carrega em <b>Terminar turno</b>. A câmara roda e o <b>Jogador 2</b> joga a Equipa B. E assim sucessivamente.</li>
+      </ol>
+      <div class="g-note">Não desligues o 1x1 (<kbd>F8</kbd>) a meio da partida: os inimigos do mapa foram retirados e o combate termina.</div></div>
+    </details>
+
+    <details>
+      <summary>⚔ Batalha 1x1 numa missão normal — o amigo controla os inimigos</summary>
+      <div class="g-body"><ol>
+        <li>Entra numa missão (campanha ou Batalha Rápida) com o teu esquadrão.</li>
+        <li>Convida o amigo pelo <b>Remote Play Together</b>.</li>
+        <li>No início do combate carrega em <b>LIGAR BATALHA</b> (secção Batalha 1x1) ou em <kbd>F8</kbd> no jogo.</li>
+        <li>Tu jogas o esquadrão; ao terminares o turno, o amigo joga os inimigos com a interface normal (a IA deixa de agir).</li>
+      </ol></div>
+    </details>
+
+    <details>
+      <summary>🤝 Co-op no modo história — dividir o esquadrão</summary>
+      <div class="g-body"><ol>
+        <li>Joga a campanha normalmente (hub, mapa da galáxia, escolhas: és tu que decides).</li>
+        <li>Convida o amigo pelo <b>Remote Play Together</b>.</li>
+        <li>No início de <b>cada combate</b> carrega em <b>LIGAR CO-OP</b> (secção Co-op) ou em <kbd>F9</kbd> no jogo.</li>
+        <li>Na secção Co-op aparecem os personagens com os botões <b>J1</b> / <b>J2</b>: escolhe quem controla cada um (por omissão alternam). Podes mudar a qualquer momento.</li>
+        <li>Em cada ronda: o <b>Jogador 1</b> joga os seus e carrega em <b>Terminar turno</b>; depois o <b>Jogador 2</b> joga os dele e carrega em <b>Terminar turno</b>; depois joga a IA.</li>
+      </ol>
+      <div class="g-note">Na vez de um jogador, os personagens do outro não podem ser selecionados. O co-op desliga-se sozinho no fim de cada missão — volta a ligá-lo no combate seguinte. Não uses o 1x1 (<kbd>F8</kbd>) ao mesmo tempo.</div></div>
+    </details>
+
+    <details>
+      <summary>🌐 Co-op em dois PCs (cada um com o seu jogo) — em desenvolvimento</summary>
+      <div class="g-body">Ainda não está disponível. Por agora usa o <b>Co-op no modo história</b> com o Remote Play Together.</div>
+    </details>
+
+    <details>
+      <summary>⌨ Teclas no jogo</summary>
+      <div class="g-body"><kbd>F8</kbd> liga/desliga a Batalha 1x1 · <kbd>F9</kbd> liga/desliga o Co-op · <kbd>F7</kbd> escreve o relatório da batalha (diagnóstico)</div>
+    </details>
+  </div>
+
   <!-- ── Batalha Rápida: mapa → combate direto (lançamento rápido do próprio jogo) ── -->
   <div id="qb-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
