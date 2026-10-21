@@ -595,6 +595,17 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
 </section>
 
 <section class="page" data-page="mods">
+  <!-- ── O que está MESMO na pasta do jogo (lido do disco, não da memória do browser) ── -->
+  <div id="game-scan" style="margin:8px 0 24px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin:0">🗂 No jogo agora</h2>
+      <span id="gs-sum" style="font-size:11px;color:var(--fg2)">—</span>
+      <button class="install-btn" id="gs-refresh" style="margin-left:auto;flex:0 0 auto;padding:6px 14px">🔍 VERIFICAR PASTA DO JOGO</button>
+    </div>
+    <div style="font-size:11px;color:var(--fg2);margin-bottom:10px">Tudo o que está instalado na pasta do jogo — mesmo o que não foi instalado por esta página. Para remover ficheiros de pak, fecha o jogo primeiro.</div>
+    <div id="gs-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="gs-msg" style="font-size:12px;color:var(--fg2);margin-top:8px"></div>
+  </div>
   <!-- ── Mods: instalação automática a partir do servidor SWMP ── -->
   <div id="mega-section" style="margin-top:8px">
     <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1820,7 +1831,12 @@ async function megaUninstall(id,btn){
   if(!root) return;
   btn.textContent='A remover...';btn.disabled=true;btn.style.opacity='0.7';
   try{
-    await _uninstallManifest(root,await _idbGet('man:'+id));
+    var man=await _idbGet('man:'+id);
+    if(man) await _uninstallManifest(root,man);
+    else{   // instalado fora desta página (ou noutro browser): remove o que a leitura da pasta encontrou
+      var gs=(_gameScan||[]).filter(function(g){ return g.match===id; });
+      for(var i=0;i<gs.length;i++) await _gsRemove(root,gs[i]);
+    }
     await _idbSet('man:'+id,null);
     delete _megaInstalled[id];
     _megaStatus[id]={msg:'Removido'};
@@ -1830,6 +1846,131 @@ async function megaUninstall(id,btn){
   renderMegaGrid();
 }
 
+// ── "No jogo agora": lê a pasta do jogo e mostra o que lá está, com remover ─────────────────────────────
+var UE4SS_BUILTIN=['shared','Keybinds','BPModLoaderMod','BPML_GenericFunctions','ConsoleEnablerMod','ConsoleCommandsMod',
+  'CheatManagerEnablerMod','LineTraceMod','SplitScreenMod','jsbLuaProfilerMod','ActorDumperMod','ZeroCompanyMP','SWMPDev'];
+var _gameScan=null;
+function _gsNorm(s){ return String(s).toLowerCase().replace(/[^a-z0-9]/g,''); }
+async function _gsDirSize(h){
+  var n=0,size=0;
+  for await (var e of h.values()){
+    if(e.kind==='file'){ try{ size+=(await e.getFile()).size; }catch(x){} n++; }
+    else { var s=await _gsDirSize(e); n+=s.n; size+=s.size; }
+  }
+  return {n:n,size:size};
+}
+async function _gsPaks(root,base,kind){
+  var out=[], dir;
+  try{ dir=await _dirAt(root,base,false); }catch(e){ return out; }
+  var loose={};
+  for await (var e of dir.values()){
+    if(e.kind==='directory'){ var s=await _gsDirSize(e); out.push({kind:kind,name:e.name,paths:[base+'/'+e.name],n:s.n,size:s.size}); }
+    else{
+      var key=e.name.replace(/\.(pak|ucas|utoc|sig)$/i,'');
+      var g=loose[key]=loose[key]||{kind:kind,name:key,paths:[],n:0,size:0};
+      g.paths.push(base+'/'+e.name); g.n++; try{ g.size+=(await e.getFile()).size; }catch(x){}
+    }
+  }
+  Object.keys(loose).forEach(function(k){ out.push(loose[k]); });
+  return out;
+}
+async function _gsUe4ss(root){
+  var out=[], dir;
+  try{ dir=await _dirAt(root,UE4SS_MODS,false); }catch(e){ return out; }
+  var txt=((await _readText(root,UE4SS_MODS+'/mods.txt'))||'').replace(/\r/g,'');
+  var on={}; txt.split('\n').forEach(function(l){ var m=/^\s*([^;:]+?)\s*:\s*([01])/.exec(l); if(m) on[m[1].toLowerCase()]=m[2]==='1'; });
+  for await (var e of dir.values()){
+    if(e.kind!=='directory') continue;
+    var en=on[e.name.toLowerCase()];
+    if(en===undefined){ try{ await e.getFileHandle('enabled.txt'); en=true; }catch(x){ en=false; } }
+    var s=await _gsDirSize(e);
+    out.push({kind:'ue4ss',name:e.name,paths:[UE4SS_MODS+'/'+e.name],n:s.n,size:s.size,enabled:en,base:UE4SS_BUILTIN.some(function(b){return b.toLowerCase()===e.name.toLowerCase();})});
+  }
+  return out;
+}
+// liga cada grupo ao mod do catálogo: pelo que esta página instalou (manifesto) ou pelo nome
+async function _gsMatch(groups){
+  var mans={};
+  for(var i=0;i<_megaMods.length;i++){ var m=await _idbGet('man:'+_megaMods[i].id); if(m) mans[_megaMods[i].id]=[].concat(m.files||[],m.dirs||[]); }
+  groups.forEach(function(g){
+    Object.keys(mans).some(function(id){
+      if(mans[id].some(function(p){ return g.paths.some(function(q){ return p===q||p.indexOf(q+'/')===0||q.indexOf(p+'/')===0; }); })){ g.match=id; return true; }
+    });
+    if(!g.match){ var n=_gsNorm(g.name);
+      _megaMods.some(function(m){ var a=_gsNorm(m.id), b=_gsNorm(m.name.split(/[(—-]/)[0]);
+        if((a.length>=5&&n.indexOf(a)>=0)||(b.length>=5&&n.indexOf(b)>=0)){ g.match=m.id; return true; } }); }
+  });
+}
+// paks: apaga ficheiro a ficheiro (com o jogo aberto estão em uso → erro claro, em vez de ficar "pendente" para
+// o mod, que também não os consegue apagar com o jogo a correr); scripts UE4SS: remoção normal + mods.txt
+async function _gsRmTree(dir){
+  var names=[]; for await (var e of dir.values()) names.push([e.name,e.kind]);
+  for(var i=0;i<names.length;i++){
+    if(names[i][1]==='directory'){ await _gsRmTree(await dir.getDirectoryHandle(names[i][0])); }
+    await dir.removeEntry(names[i][0]);
+  }
+}
+async function _gsRemove(root,g){
+  if(g.kind==='ue4ss'){
+    for(var i=0;i<g.paths.length;i++) await _removePath(root,g.paths[i]);
+    await _modsTxt(root,g.name,false);
+    return;
+  }
+  for(var j=0;j<g.paths.length;j++){
+    var segs=_splitPath(g.paths[j]), parent=await _dirAt(root,segs.slice(0,-1).join('/'),false), name=segs[segs.length-1];
+    var isDir=false; try{ await parent.getDirectoryHandle(name); isDir=true; }catch(e){}
+    if(isDir) await _gsRmTree(await parent.getDirectoryHandle(name));
+    await parent.removeEntry(name);
+  }
+}
+async function _gsScan(ask){
+  var msg=document.getElementById('gs-msg'), list=document.getElementById('gs-list');
+  var root=ask?await _getModsDir():(_modsDir&&await _modsDir.queryPermission({mode:'readwrite'})==='granted'?_modsDir:null);
+  if(!root){ document.getElementById('gs-sum').textContent='pasta do jogo ainda não escolhida'; return; }
+  var groups=[].concat(await _gsPaks(root,PAK_MODS,'pak'),await _gsPaks(root,'Content/Paks/LogicMods','logic'),await _gsUe4ss(root));
+  await _gsMatch(groups); _gameScan=groups;
+  var mus=null; try{ mus=await _musGameScan(root); }catch(e){}
+  // os cartões do catálogo passam a mostrar "Instalado" pelo que está no disco
+  var changed=false;
+  groups.forEach(function(g){ if(g.match&&!Object.prototype.hasOwnProperty.call(_megaInstalled,g.match)){ _megaInstalled[g.match]=0; changed=true; } });
+  if(changed) renderMegaGrid();
+  var KIND={pak:'Pak (~mods)',logic:'LogicMods',ue4ss:'Script UE4SS'};
+  var rows=groups.map(function(g,i){
+    var cat=g.match?_megaMods.find(function(m){return m.id===g.match;}):null;
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px">'+
+      '<span style="flex:1 1 220px;min-width:0"><b style="color:var(--fg)">'+_qbEsc(cat?cat.name:g.name)+'</b>'+(cat&&cat.name!==g.name?' <span style="color:var(--fg2)">('+_qbEsc(g.name)+')</span>':'')+
+      '<br><span style="color:var(--fg2);font-size:11px">'+KIND[g.kind]+' · '+g.n+' ficheiro(s) · '+_fmtSize(g.size)+(g.kind==='ue4ss'?(g.enabled?' · ligado':' · desligado'):'')+(cat?'':' · fora do catálogo')+'</span></span>'+
+      (g.base?'<span style="font-size:11px;color:var(--fg2)">base do UE4SS/SWMP</span>':'<button class="install-btn" data-gs="'+i+'" style="flex:0 0 auto;padding:5px 12px">🗑 Remover</button>')+'</div>';
+  });
+  if(mus&&mus.on&&mus.songs) rows.push('<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px">'+
+    '<span style="flex:1 1 220px"><b style="color:var(--fg)">Música trocada</b><br><span style="color:var(--fg2);font-size:11px">'+mus.songs+' músicas da trilha SWMP tocam no jogo</span></span>'+
+    '<button class="install-btn" id="gs-mus-reset" style="flex:0 0 auto;padding:5px 12px">↩ Música original</button></div>');
+  list.innerHTML=rows.join('')||'<div style="font-size:12px;color:var(--fg2)">Nenhum mod na pasta do jogo — está tudo original.</div>';
+  var extra=groups.filter(function(g){return !g.base;}).length;
+  document.getElementById('gs-sum').textContent=extra+' mod(s) instalado(s)'+(mus&&mus.on&&mus.songs?' · música trocada':'');
+  var mr=document.getElementById('gs-mus-reset'); if(mr) mr.onclick=function(){ _musGameReset().then(function(){ _gsScan(false); }); };
+}
+document.getElementById('gs-refresh').addEventListener('click',function(){ _gsScan(true); });
+document.getElementById('gs-list').addEventListener('click',async function(e){
+  var b=e.target.closest('button[data-gs]'); if(!b||!_gameScan) return;
+  var g=_gameScan[Number(b.dataset.gs)]; if(!g) return;
+  if(!confirm('Remover "'+g.name+'" da pasta do jogo?')) return;
+  var msg=document.getElementById('gs-msg');
+  try{
+    var root=await _getModsDir(); if(!root) return;
+    b.disabled=true; b.textContent='A remover…';
+    await _gsRemove(root,g);
+    if(g.match){ await _idbSet('man:'+g.match,null); delete _megaInstalled[g.match]; renderMegaGrid(); }
+    msg.textContent='✓ "'+g.name+'" removido.';
+  }catch(err){
+    msg.textContent=(err&&(err.name==='NoModificationAllowedError'||err.name==='InvalidModificationError'||/in use|being used|locked/i.test(err.message)))
+      ?'✗ Não deu para remover "'+g.name+'": o jogo está aberto e está a usar os ficheiros. Fecha o jogo e carrega outra vez em Remover.'
+      :'✗ Erro ao remover "'+g.name+'": '+(err&&err.message||err);
+  }
+  _gsScan(false);
+});
+setInterval(function(){ if(document.querySelector('.page.on')?.dataset.page==='mods') _gsScan(false); },10000);
+setTimeout(function(){ _gsScan(false); },2000);
 async function megaImportAll(){
   if(_megaImportRunning){_megaImportStop=true;return;}
   var root;
