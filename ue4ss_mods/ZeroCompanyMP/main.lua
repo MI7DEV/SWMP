@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.17
+-- ZeroCompanyMP/main.lua — v0.18
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.17 carregado")
+print(" ZeroCompanyMP v0.18 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -939,6 +939,18 @@ local function cam_face(target)
     step()
 end
 
+-- missões com temporizador (resgate em Ryloth: BRGameTacticalTimer) acabavam o 1x1 a meio: a cada troca de vez o
+-- tempo volta ao total (DurationToCount, mínimo 2: o jogo desconta 1 a cada fim de vez), nunca chega a zero
+local function pvp_hold_timers()
+    local n = 0
+    for _, t in ipairs(FindAllOf("BRGameTacticalTimer") or {}) do
+        if valid(t) and t:GetFullName():find(":PersistentLevel%.") then
+            if pcall(function() t.DurationRemaining = math.max(t.DurationToCount, 2) end) then n = n + 1 end
+        end
+    end
+    if n > 0 then print(("[ZeroCompanyMP] Batalha 1x1: %d temporizador(es) reposto(s)"):format(n)) end
+end
+
 -- troca as equipas de todas as unidades do jogador/inimigo (guarda o lado original para repor)
 local function pvp_swap(want)
     if want == pvp.swapped then return end
@@ -962,6 +974,7 @@ local function pvp_swap(want)
     end
     pvp.swapped = want
     if not want then pvp.units = {} end
+    pvp_hold_timers()
     print(("[ZeroCompanyMP] Batalha 1x1: %s (%d unidades)"):format(want and "vez do JOGADOR 2" or "vez do JOGADOR 1", n))
     ExecuteWithDelay(1500, function() in_game_thread(pvp_select_side) end)
     if pvp.yaw1 then

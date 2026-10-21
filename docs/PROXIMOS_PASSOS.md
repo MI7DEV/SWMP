@@ -21,8 +21,9 @@
    `SelectNextCharacter()` até `GetSelectedCharacter()` ser do PlayerTeam; J1→J2 seleciona B1_C_0, J2→J1 seleciona HAWKS.
 2. ~~VIPs na troca~~ — v0.17: `Char_VIP*` fora de `pvp_swap`. Em Ryloth 010 os `Char_VIP_Civilian_Captured_*` são
    CivilianTeam e ficam fora da troca (J2 = 12 B1, J1 = 4 heróis).
-3. Missões com temporizador (resgate em Ryloth) acabam o 1x1 — para o modo batalha escolher mapas/objetivo
-   "derrotar todos" ou desligar objetivos.
+3. ~~Missões com temporizador~~ — RESOLVIDO v0.18 (testado 21/10 em Ryloth 010): a cada troca de vez
+   `pvp_hold_timers` repõe `BRGameTacticalTimer.DurationRemaining` = `DurationToCount` (mín. 2); ficou 4/4 e 6/6
+   após 3 fins de vez. Objetivos de resgate/evacuação continuam ativos (o J1 ainda pode ganhar evacuando).
 4. Ao reabrir, o jogo às vezes retoma direto a última missão (sem passar pelo menu) — a Batalha Rápida só funciona
    a partir do menu principal (`qb_vm` só existe lá).
 
