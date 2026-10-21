@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.18
+-- ZeroCompanyMP/main.lua — v0.19
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.18 carregado")
+print(" ZeroCompanyMP v0.19 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -1127,7 +1127,25 @@ local function qb_mission_testing(on, world)
     return true
 end
 
-local function qb_launch(world_path, pvp)
+-- esquadrão escolhido no portal: caminhos de classe (/Game/.../Char_Hero_X.Char_Hero_X_C) escritos no
+-- DefaultMissionSquad (lista de SoftClass que o lançamento de testes usa); sem lista fica o esquadrão de testes
+local function qb_set_squad(paths)
+    if type(paths) ~= "table" or #paths == 0 then return "padrão" end
+    local ksl = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    local mt = StaticFindObject("/Script/BitReactorGame.Default__BRG_MissionTestingSettings")
+    if not (valid(ksl) and valid(mt)) then return "indisponível" end
+    local arr = mt.DefaultMissionSquad
+    pcall(function() arr:Empty() end)
+    local n = 0
+    for _, p in ipairs(paths) do
+        if type(p) == "string" and p:find("^/Game/[%w_/%.%-]+_C$") then
+            if pcall(function() arr[arr:GetArrayNum() + 1] = ksl:Conv_SoftClassPathToSoftClassRef(ksl:MakeSoftClassPath(p)) end) then n = n + 1 end
+        end
+    end
+    return n
+end
+
+local function qb_launch(world_path, pvp, squad)
     local list = qb_worlds()
     if not list then return qb_state("erro: lista de mapas indisponível") end
     local w
@@ -1142,6 +1160,7 @@ local function qb_launch(world_path, pvp)
         log[#log + 1] = name .. "=" .. (ok and tostring(r) or ("ERRO " .. tostring(r)))
         return ok, r
     end
+    step("lista", function() return qb_set_squad(squad) end)
     step("config", function() return vm:TrySettingMissionTestingConfigurations() end)
     step("mundo", function() return vm:SetDesiredWorld(w) end)
     step("esquadrão", function() return vm:TrySettingDesiredSquadFromMissionTesting() end)
@@ -1163,7 +1182,51 @@ local function qb_poll()
     if ts <= qb.cmd_ts then return end
     qb.cmd_ts = ts
     local ok, c = pcall(json.decode, raw)
-    if ok and type(c) == "table" and c.cmd == "launch" and type(c.world) == "string" then qb_launch(c.world, c.pvp) end
+    if ok and type(c) == "table" and c.cmd == "launch" and type(c.world) == "string" then
+        qb_launch(c.world, c.pvp, c.squad)
+        qb.squad, qb.team_b = c.squad, tonumber(c.team_b)
+    end
+end
+
+-- Modo batalha: o esquadrão lançado tem as duas equipas (A primeiro, as últimas team_b entradas são a B).
+-- Já no mapa, a equipa B ocupa as posições dos inimigos do mapa (TeleportActor), esses inimigos saem
+-- (K2_DestroyActor, testado estável em 21/10) e a B passa a EnemyTeam — o 1x1 depois alterna as duas.
+local function qb_battle_setup(squad, team_b)
+    if type(squad) ~= "table" or not team_b or team_b < 1 then return end
+    local st, su = pvp_statics()
+    local te = StaticFindObject(TEAM_PATH.E)
+    if not (valid(st) and valid(su) and valid(te)) then return end
+    local want = {}                                   -- classe -> quantas unidades dessa classe são da equipa B
+    for i = #squad - team_b + 1, #squad do local p = squad[i]; if type(p) == "string" then want[p] = (want[p] or 0) + 1 end end
+    local heroes_b, enemies = {}, {}
+    for _, c in ipairs(level_units()) do
+        local t = team_name(st, c)
+        if t == "EnemyTeam_C" then enemies[#enemies + 1] = c
+        elseif t == "PlayerTeam_C" then
+            local cls = c:GetClass():GetFullName():gsub("^%S+%s+", "")
+            if (want[cls] or 0) > 0 then want[cls] = want[cls] - 1; heroes_b[#heroes_b + 1] = c end
+        end
+    end
+    local spots = {}
+    for _, e in ipairs(enemies) do
+        local l, r = e:K2_GetActorLocation(), e:K2_GetActorRotation()
+        spots[#spots + 1] = { L = { X = l.X, Y = l.Y, Z = l.Z }, R = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } }
+    end
+    -- o TeleportActor recusa alguns pontos (devolve false): tenta o ponto seguinte até um aceitar
+    local next_spot = 1
+    for _, h in ipairs(heroes_b) do
+        while next_spot <= #spots do
+            local s = spots[next_spot]
+            next_spot = next_spot + 1
+            local ok, moved = pcall(function() return su:TeleportActor(h, s.L, s.R, false, false) end)
+            if ok and moved then break end
+        end
+        pcall(function() su:ChangeActorTeam(h, te, true) end)
+    end
+    if #heroes_b > 0 then
+        for _, e in ipairs(enemies) do if valid(e) then pcall(function() e:K2_DestroyActor() end) end end
+    end
+    print(("[ZeroCompanyMP] Modo batalha: equipa B = %d unidades, %d inimigos do mapa removidos"):format(#heroes_b, #heroes_b > 0 and #enemies or 0))
 end
 
 -- já em combate: desliga o Mission Testing (não mexe na campanha) e liga o 1x1 se foi pedido
@@ -1172,6 +1235,11 @@ local function qb_after_combat_start()
     qb.restore = false
     qb_mission_testing(false)
     qb_state("em combate")
+    if qb.team_b then
+        local okb, e = pcall(qb_battle_setup, qb.squad, qb.team_b)
+        if not okb then print("[ZeroCompanyMP] Modo batalha erro: " .. tostring(e)) end
+        qb.squad, qb.team_b = nil, nil
+    end
     if qb.pvp then qb.pvp = false; pvp_set(true) end
 end
 

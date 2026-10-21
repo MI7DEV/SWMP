@@ -33,10 +33,13 @@
    PlayerTeam durante a vez dele, a mira nativa já deve calcular cobertura e % — **verificar** com um ataque real
    (tecla 2 → hover num herói → ver % e cobertura; ver também `UBRG_TargetedActorVM`). Confirmar também o
    "overwatch/reação" do lado que não está a jogar.
-2. **Modo batalha completo**: 6 unidades por jogador escolhidas no portal, mapa aleatório (lista `mp_qb_worlds.json`,
-   categoria `Missions.Skirmishes`) e posições aleatórias (teleportar unidades para pontos navegáveis no início).
-   O esquadrão do J1 pode usar `B_QuickLaunchViewModel:AddCharacterToSquad(SoftClass)`; o do J2 precisa de spawn de
-   personagens (procurar spawners: `MissionStartSpawnerConfigs`, `GetSpawnSetForMission`, `BRActorSpawner`).
+2. **Modo batalha** — FEITO v0.19 (testado 21/10, Ryloth 010, 4x4): no portal, com 1x1 marcado, cada jogador escolhe
+   até 4 personagens (Equipa A/B). `mp_qb_cmd.json` leva `squad` (A depois B, caminhos de classe) + `team_b`; o mod
+   escreve `BRG_MissionTestingSettings.DefaultMissionSquad`, e no combate (`qb_battle_setup`) teleporta a B para as
+   posições dos inimigos do mapa (`BitReactorGameStatics_Unit:TeleportActor`, tenta o ponto seguinte se devolver false),
+   remove esses inimigos (`K2_DestroyActor`, estável) e passa a B a EnemyTeam. Falta: lista de personagens só tem os 8
+   conhecidos (`QB_HEROES` no index.html) — descobrir o roster completo; só há 4 pontos de entrada da equipa A
+   (mais de 4 ficam empilhados); posições aleatórias; testar noutros mapas.
 3. **Co-op (modo história)**: cada um escolhe 3 personagens; mesmo turno do jogador dividido (J1 joga os seus 3,
    depois o J2 os seus 3) contra a IA. **Requisito do Marco: dois ecrãs/jogos separados** (cada um no seu PC com o
    seu jogo original, só vê as suas unidades). Isto exige sincronizar dois jogos (lockstep: replicar cada ação —

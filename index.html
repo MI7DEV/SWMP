@@ -384,6 +384,10 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg);cursor:pointer"><input type="checkbox" id="qb-pvp"> 1x1</label>
       <button class="install-btn" id="qb-go" style="flex:0 0 auto;padding:9px 18px">⚡ LANÇAR</button>
     </div>
+    <div id="qb-teams" style="display:none;margin-top:12px;gap:12px;flex-wrap:wrap">
+      <div style="flex:1 1 220px;min-width:0"><div style="font-size:11px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Equipa A — Jogador 1</div><div id="qb-team-a" style="display:grid;gap:6px"></div></div>
+      <div style="flex:1 1 220px;min-width:0"><div style="font-size:11px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">Equipa B — Jogador 2</div><div id="qb-team-b" style="display:grid;gap:6px"></div></div>
+    </div>
     <div id="qb-info" style="font-size:12px;color:var(--fg2);margin-top:8px"></div>
   </div>
 
@@ -2244,6 +2248,39 @@ async function _qbLoadWorlds(root){
   try{ var last=await _idbGet('qb:world'); if(!keep&&last) sel.value=last; }catch(e){}
   _qbWorldsLoaded=true; return true;
 }
+// Modo batalha (1x1): cada jogador escolhe até 4 personagens; o mod lança as duas equipas no esquadrão, põe a B no
+// lugar dos inimigos do mapa e tira esses inimigos (testado em Ryloth 010, 21/10)
+var QB_HEROES=[
+  ['HAWKS','/Game/Game/Core/Pawns/HeroCharacters/UniversalCharacters/Control/Char_Hero_HAWKS_Control.Char_Hero_HAWKS_Control_C'],
+  ['Luco Bronc','/Game/Game/Core/Pawns/HeroCharacters/AuthoredCharacters/Char_Hero_LucoBronc_Sniper.Char_Hero_LucoBronc_Sniper_C'],
+  ['Cly Kullervo','/Game/Game/Core/Pawns/HeroCharacters/AuthoredCharacters/Char_Hero_ClyKullervo_Warrior.Char_Hero_ClyKullervo_Warrior_C'],
+  ['Astromech','/Game/Game/Core/Pawns/Char_Hero_Astromech.Char_Hero_Astromech_C'],
+  ['Tel Rea (Jedi)','/Game/Game/Core/Pawns/HeroCharacters/Jedi/Char_Hero_TelRea_Jedi.Char_Hero_TelRea_Jedi_C'],
+  ['Kabb Uppercut','/Game/Game/Core/Pawns/HeroCharacters/AuthoredCharacters/Char_Hero_KabbUppercut_Scoundrel.Char_Hero_KabbUppercut_Scoundrel_C'],
+  ['BR-1','/Game/Game/Core/Pawns/HeroCharacters/AuthoredCharacters/Char_Hero_Astromech_BR-1.Char_Hero_Astromech_BR-1_C'],
+  ['Aurelio','/Game/Game/Core/Pawns/CampaignCharacters/Arc01/Char_Hero_Aurelio.Char_Hero_Aurelio_C']
+];
+function _qbTeamSlots(id,def){
+  var box=document.getElementById(id); box.innerHTML='';
+  for(var i=0;i<4;i++){
+    var s=document.createElement('select');
+    s.style.cssText='width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:12px';
+    s.innerHTML='<option value="">— vazio —</option>'+QB_HEROES.map(function(h){return '<option value="'+h[1]+'">'+h[0]+'</option>';}).join('');
+    s.value=def[i]||''; box.appendChild(s);
+  }
+}
+function _qbTeams(){
+  function v(id){ return Array.prototype.map.call(document.querySelectorAll('#'+id+' select'),function(s){return s.value;}).filter(Boolean); }
+  return {a:v('qb-team-a'),b:v('qb-team-b')};
+}
+async function _qbInitTeams(){
+  var p=QB_HEROES.map(function(h){return h[1];}), t={a:p.slice(0,4),b:p.slice(4,8)};
+  try{ var s=await _idbGet('qb:teams'); if(s) t=JSON.parse(s); }catch(e){}
+  _qbTeamSlots('qb-team-a',t.a); _qbTeamSlots('qb-team-b',t.b);
+  var cb=document.getElementById('qb-pvp'), box=document.getElementById('qb-teams');
+  function show(){ box.style.display=cb.checked?'flex':'none'; }
+  cb.addEventListener('change',show); show();
+}
 async function _qbGo(){
   var info=document.getElementById('qb-info'), world=document.getElementById('qb-world').value;
   try{
@@ -2251,7 +2288,12 @@ async function _qbGo(){
     if(!_qbWorldsLoaded&&!(await _qbLoadWorlds(root))){ info.textContent='Abre o jogo (com o mod ZeroCompanyMP v0.13+) até ao menu principal e tenta de novo.'; return; }
     world=document.getElementById('qb-world').value; if(!world){ info.textContent='Escolhe um mapa.'; return; }
     _idbSet('qb:world',world);
-    await _writeFile(root,QB_CMD_FILE,JSON.stringify({cmd:'launch',world:world,pvp:document.getElementById('qb-pvp').checked,ts:Math.floor(Date.now()/1000)}));
+    var cmd={cmd:'launch',world:world,pvp:document.getElementById('qb-pvp').checked,ts:Math.floor(Date.now()/1000)};
+    if(cmd.pvp){
+      var t=_qbTeams(); if(!t.a.length||!t.b.length){ info.textContent='Escolhe pelo menos 1 personagem em cada equipa.'; return; }
+      cmd.squad=t.a.concat(t.b); cmd.team_b=t.b.length; _idbSet('qb:teams',JSON.stringify(t));
+    }
+    await _writeFile(root,QB_CMD_FILE,JSON.stringify(cmd));
     info.textContent='Pedido enviado ao jogo…'; setTimeout(_qbPoll,2500);
   }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
 }
@@ -2267,6 +2309,7 @@ async function _qbPoll(){
   }catch(e){}
 }
 document.getElementById('qb-go').addEventListener('click',_qbGo);
+_qbInitTeams();
 setInterval(_qbPoll,3000);
 document.getElementById('pvp-on').addEventListener('click',function(){_pvpCmd('on');});
 document.getElementById('pvp-off').addEventListener('click',function(){_pvpCmd('off');});
