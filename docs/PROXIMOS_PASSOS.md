@@ -47,6 +47,25 @@
    seu jogo original, só vê as suas unidades). Isto exige sincronizar dois jogos (lockstep: replicar cada ação —
    habilidade + alvo + resultado — pelo SWMP-Host/relay, e alinhar o RNG/resultado de acertos). É o maior trabalho;
    começar por prova de conceito: replicar um movimento de uma unidade entre dois PCs.
+   **Estado 21/10 (etapa 1 — capturar/reproduzir ações, num só PC):**
+   - O que existia NÃO era co-op: o mod só envia TURN_STATE informativo (`mp_sync_out.json`) e o SWMP-Host (server.py,
+     relay WebSocket + túnel Cloudflare) só reencaminha; nenhuma ação é replicada.
+   - Dinâmica combinada com o Marco: portal Host/Cliente → fora do combate só o host joga a história livre (cliente
+     espectador); antes de cada missão o save do host vai para o cliente; na preparação escolhe-se quem controla cada
+     personagem; no combate cada um joga os seus e as ações são replicadas, com o host autoritativo (o cliente é
+     corrigido com vida/posições/mortos); a IA corre no host.
+   - CAPTURA funciona: `RegisterHook` em `BitReactorAbilitySystemComponent:HandleAbilityActivated/HandleAbilityCommitted`
+     (args: ctx = ASC, 1.º = UGameplayAbility) e em `GameplayAbility:K2_CommitAbility/K2_EndAbility` disparam para
+     cada habilidade (testado: GA_TeamTurnEnd_C, GA_TacticalEncounterEnded_C por unidade).
+   - **CRASH**: iterar propriedades da habilidade (ForEachProperty + leitura) DENTRO do hook HandleAbilityCommitted
+     crasha (0x18). No hook só ler classe + dono; inspeção pesada fora do hook (guardar nome e inspecionar depois) ou
+     com o jogo parado.
+   - REPRODUÇÃO (por testar): `BitReactorAbilitySystemComponent:SetAITargetingDataOverride(handle)` +
+     `TryActivatePlannedAbility(ability, source)` é o caminho da IA; RNG do jogo: `BitReactorRandomStatics` (geradores
+     com semente).
+   - SWMPDev: cada execução tem ambiente próprio — estado entre execuções só em `_G.X`.
+   - Modo batalha: desligar o 1x1 (F8) a meio termina o combate (`GA_TacticalEncounterEnded`) — os inimigos do mapa
+     foram removidos.
 4. Radial ou barra reta: a opção "Estilo de Seleção de Habilidade" do jogo — testar o J2 com as duas.
 
 ## Ferramentas de desenvolvimento (PC do Marco)
