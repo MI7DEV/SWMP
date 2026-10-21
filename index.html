@@ -550,7 +550,7 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     </p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="install-btn" id="net-host" style="flex:0 0 auto;padding:9px 18px">⚔ CRIAR SESSÃO (anfitrião)</button>
-      <input id="net-code" placeholder="Código do anfitrião" maxlength="8" style="flex:0 1 170px;min-width:0;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:13px;letter-spacing:.15em;text-transform:uppercase">
+      <input id="net-code" placeholder="Código do anfitrião" maxlength="17" style="flex:0 1 170px;min-width:0;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:13px;letter-spacing:.15em;text-transform:uppercase">
       <button class="install-btn" id="net-join" style="flex:0 0 auto;padding:9px 18px">👥 ENTRAR (convidado)</button>
       <button class="install-btn" id="net-leave" style="flex:0 0 auto;padding:9px 18px;display:none">■ SAIR</button>
     </div>
@@ -2446,6 +2446,29 @@ async function _netPump(){
   }catch(e){}
 }
 var _netInSeq=0;
+// só passa ao mod mensagens com a forma esperada (o mod também valida dono/vez/unidade)
+function _netClean(m){
+  if(!m||typeof m!=='object') return null;
+  var nm=/^[\w-]{1,80}$/, num=function(v){ return typeof v==='number'&&isFinite(v); }, o={t:m.t};
+  if(m.t==='endphase') return o;
+  if(m.t==='act'){
+    if(!nm.test(m.unit||'')||!nm.test(m.ab||'')) return null;
+    o.unit=m.unit; o.ab=m.ab;
+    if(m.target!=null){ if(!nm.test(m.target)) return null; o.target=m.target; }
+    if(m.paid!=null&&nm.test(m.paid)) o.paid=m.paid;
+    ['x','y','z','yaw','ap','map'].forEach(function(k){ if(num(m[k])) o[k]=m[k]; });
+    return o;
+  }
+  if(m.t==='snap'&&Array.isArray(m.units)&&m.units.length<=200){
+    o.phase=m.phase===2?2:1; o.phase_start=m.phase_start===true; o.owners={};
+    if(m.owners&&typeof m.owners==='object') Object.keys(m.owners).slice(0,50).forEach(function(k){ if(nm.test(k)) o.owners[k]=m.owners[k]===2?2:1; });
+    o.units=m.units.filter(function(u){ return u&&nm.test(u.n||'')&&num(u.x)&&num(u.y)&&num(u.z); }).map(function(u){
+      var r={n:u.n,x:u.x,y:u.y,z:u.z,dead:u.dead===true}; ['yaw','hp','ap','map'].forEach(function(k){ if(num(u[k])) r[k]=u[k]; });
+      if(typeof u.team==='string'&&nm.test(u.team)) r.team=u.team; return r; });
+    return o;
+  }
+  return null;
+}
 async function _netDeliver(m){
   m.seq=++_netInSeq;           // numeração própria do lado de quem recebe (o mod só aceita seq crescentes)
   _net.inMsgs.push(m); if(_net.inMsgs.length>40) _net.inMsgs.shift();
@@ -2466,9 +2489,12 @@ function _netWire(conn){
   });
   conn.on('data',function(d){
     if(!d||typeof d!=='object') return;
-    if(d.k==='mod') _netDeliver(d.m);
-    else if(d.k==='save'){ _net.saveFiles=d.files; document.getElementById('net-save-recv').style.display='';
-      document.getElementById('net-save-info').textContent='Save recebido ('+d.files.length+' ficheiros) — carrega em GUARDAR SAVE RECEBIDO.'; }
+    if(d.k==='mod'){ var mm=_netClean(d.m); if(mm) _netDeliver(mm); }
+    else if(d.k==='save'&&_net.role==='client'&&Array.isArray(d.files)&&d.files.length<=300){
+      _net.saveFiles=d.files.filter(function(f){ return f&&typeof f.name==='string'&&/^[\w.-]+\.sav$/i.test(f.name)&&f.data instanceof ArrayBuffer&&f.data.byteLength<50*1024*1024; });
+      if(!_net.saveFiles.length) return;
+      document.getElementById('net-save-recv').style.display='';
+      document.getElementById('net-save-info').textContent='Save recebido ('+_net.saveFiles.length+' ficheiros) — carrega em GUARDAR SAVE RECEBIDO.'; }
   });
   conn.on('close',function(){ _netState('desligado'); _netInfo('Ligação terminada.'); clearInterval(_net.timer); _netCmd(false); });
   conn.on('error',function(e){ _netInfo('Erro na ligação: '+(e&&e.message||e)); });
@@ -2479,16 +2505,24 @@ async function _netStart(role){
     await _netLoadPeer();
     _netLeave(true);
     _net.role=role;
-    var code=role==='host'?Math.random().toString(36).slice(2,8).toUpperCase():document.getElementById('net-code').value.trim().toUpperCase();
-    if(role==='client'&&code.length<4){ _netInfo('Escreve o código que o anfitrião te deu.'); return; }
-    _net.peer=role==='host'?new Peer('swmp-coop-'+code):new Peer();
+    // código = ID público (6) + segredo (10), gerados com crypto; o anfitrião só aceita quem mandar o segredo
+    function rnd(n){ var A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789', b=new Uint8Array(n), s=''; crypto.getRandomValues(b); for(var i=0;i<n;i++) s+=A[b[i]%32]; return s; }
+    var code=role==='host'?rnd(6)+'-'+rnd(10):document.getElementById('net-code').value.trim().toUpperCase();
+    var m=/^([A-Z2-9]{6})-([A-Z2-9]{10})$/.exec(code);
+    if(!m){ _netInfo('Escreve o código completo que o anfitrião te deu (XXXXXX-XXXXXXXXXX).'); return; }
+    _net.secret=m[2];
+    _net.peer=role==='host'?new Peer('swmp-coop-'+m[1]):new Peer();
     _net.peer.on('error',function(e){ _netInfo('Erro: '+(e.type==='peer-unavailable'?'código não encontrado — confirma com o anfitrião':(e.message||e.type))); });
     document.getElementById('net-leave').style.display='';
     if(role==='host'){
-      _net.peer.on('open',function(){ _netState('à espera'); _netInfo('Código da sessão: '+code+' — envia-o ao convidado.'); document.getElementById('net-code').value=code; });
-      _net.peer.on('connection',function(c){ if(_net.conn&&_net.conn.open){ c.close(); return; } _netWire(c); });
+      _net.peer.on('open',function(){ _netState('à espera'); _netInfo('Código da sessão: '+code+' — envia-o só ao convidado.'); document.getElementById('net-code').value=code; });
+      _net.peer.on('connection',function(c){
+        var ok=c.metadata&&typeof c.metadata.secret==='string'&&c.metadata.secret===_net.secret;
+        if(!ok||(_net.conn&&_net.conn.open)){ c.on('open',function(){ c.close(); }); return; }
+        _netWire(c);
+      });
     }else{
-      _net.peer.on('open',function(){ _netState('a ligar'); _netWire(_net.peer.connect('swmp-coop-'+code,{reliable:true})); });
+      _net.peer.on('open',function(){ _netState('a ligar'); _netWire(_net.peer.connect('swmp-coop-'+m[1],{reliable:true,metadata:{secret:_net.secret}})); });
     }
   }catch(e){ _netInfo('Erro: '+e.message); }
 }
