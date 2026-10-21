@@ -31,6 +31,25 @@
    ]
   },
   {
+   "id": "aftermath",
+   "name": "Aftermath DLC — Redux 14.4.3 (nova campanha)",
+   "desc": "Campanha nova pós-jogo com novos mapas, chefes, especializações e heróis (Cody, Kix, Mace). Versão Redux 14.4.3: arranca sem erro no build atual do jogo (25898267, testado 21/10/2026) — o Aftermath 8.8.3 original foi feito para o build 25513890 e crasha no arranque. Começa um jogo novo de Endgame depois de instalar; guarda os teus saves antes.",
+   "type": "game",
+   "options": [
+    {
+     "label": "Português",
+     "url": "/api/files?f=AftermathRedux-14.4.3-PT.zip",
+     "size": 405839285
+    },
+    {
+     "label": "English",
+     "url": "/api/files?f=AftermathRedux-14.4.3-EN.zip",
+     "size": 376837825
+    }
+   ],
+   "rank": 9
+  },
+  {
    "id": "full-customization",
    "name": "Full Customization (Mandalorian, Padawan & More)",
    "desc": "Personalização completa de recrutas.",
@@ -320,25 +339,6 @@
     }
    ],
    "rank": 8
-  },
-  {
-   "id": "aftermath",
-   "name": "Aftermath Redux DLC (nova campanha)",
-   "desc": "Campanha nova pós-jogo com novos mapas, chefes, especializações e heróis (Cody, Kix, Mace). Começa um jogo novo de Endgame depois de instalar.",
-   "type": "game",
-   "options": [
-    {
-     "label": "Português",
-     "url": "/api/files?f=AftermathRedux-14.4.3-PT.zip",
-     "size": 405839285
-    },
-    {
-     "label": "English",
-     "url": "/api/files?f=AftermathRedux-14.4.3-EN.zip",
-     "size": 376837825
-    }
-   ],
-   "rank": 9
   },
   {
    "id": "better-camera",
