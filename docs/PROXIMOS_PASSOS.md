@@ -48,7 +48,24 @@
    vez; `coop_poll` (1 s) tira a seleção de personagens do outro (SelectNextCharacter até ser do dono da vez).
    Temporizadores: +1 ao fim da vez do J1 (a vez extra desconta). Estado/donos em mp_coop.json. Por ver: recargas e
    efeitos que contam por turno de equipa podem andar 2x por ronda; testar numa missão da campanha real.
-   **Co-op em dois PCs (cada um com o seu jogo) — ainda NÃO feito**, notas abaixo:
+   **Co-op em dois PCs — BETA v0.22 (21/10), por testar entre duas casas:**
+   - Portal (index.html, secção "Co-op em 2 PCs"): PeerJS 1.5.4 (vendor/peerjs.min.js com SRI), código de sessão
+     `swmp-coop-XXXXXX`; ponte mod↔rede por ficheiros mp_net_cmd/out/in.json (testado entre 2 separadores: mensagens
+     nos dois sentidos, sem reenviar antigas, save de 3 MB inteiro). Envio de save: anfitrião lê SaveGames (*.sav), o
+     convidado faz cópia `swmp_backup_<data>` e grava (do mais antigo ao mais recente → "Continuar" pega no do host).
+   - Mod (`net_*`): HOST corre o co-op (vez J1/J2), recebe {t=act} e repete: movimento = TeleportActor (TESTADO);
+     habilidade = TryActivatePlannedAbility + IA_ConfirmTarget (TESTADO: dispara/gasta PA). Manda {t=snap} 4 s depois de
+     cada habilidade paga e no fim de cada vez (TESTADO: IA joga, ronda 2 começa, snaps continuam).
+     CONVIDADO: sem IA local (grupo IA→jogador), IncomingDamageMultiplier=0, aplica snaps (TESTADO: mover, vida,
+     remover mortos). Captura: `HandleAbilityActivated` = escolha (ex. GA_StandardShot_Longarm_C) +
+     `HandleAbilityCommitted` = paga (alvo em `TargetActor`, ex. GA_PFAShot_*), só se gastou PA; movimento quando parou.
+   - POR RESOLVER: a mira do host abre no alvo por omissão; `SetSuggestedTarget`/`SetAITargetingDataOverride` não a
+     mudam; `GetSuggestedTarget()` dá o alvo da mira aberta só uns frames depois; trocar com TriggerNextTarget /
+     IA_SelectNextTarget(_OTS) não foi validado (o Luco só tinha 1 alvo). O log mostra "mira de X passo N: alvo" e
+     "AVISO alvo ... disparou em ..." — ver no 1.º teste real. Habilidades com alvo de posição (granadas) ainda não.
+   - Testes: no SWMPDev o estado entre execuções só em `_G`; simular cliques é instável (mira presa → IA_CancelTarget).
+   **Notas da investigação (21/10):**
+
 3. **Co-op (modo história)**: cada um escolhe 3 personagens; mesmo turno do jogador dividido (J1 joga os seus 3,
    depois o J2 os seus 3) contra a IA. **Requisito do Marco: dois ecrãs/jogos separados** (cada um no seu PC com o
    seu jogo original, só vê as suas unidades). Isto exige sincronizar dois jogos (lockstep: replicar cada ação —

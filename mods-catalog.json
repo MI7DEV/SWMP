@@ -22,7 +22,7 @@
    "type": "lua-files",
    "options": [
     {
-     "label": "v0.21",
+     "label": "v0.22",
      "files": {
       "ZeroCompanyMP/Scripts/main.lua": "/ue4ss_mods/ZeroCompanyMP/main.lua",
       "ZeroCompanyMP/Scripts/swmp_player.ps1": "/ue4ss_mods/ZeroCompanyMP/swmp_player.ps1"

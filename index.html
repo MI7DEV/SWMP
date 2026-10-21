@@ -442,8 +442,19 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
     </details>
 
     <details>
-      <summary>🌐 Co-op em dois PCs (cada um com o seu jogo) — em desenvolvimento</summary>
-      <div class="g-body">Ainda não está disponível. Por agora usa o <b>Co-op no modo história</b> com o Remote Play Together.</div>
+      <summary>🌐 Co-op em dois PCs (cada um com o seu jogo) — BETA</summary>
+      <div class="g-body"><ol>
+        <li>Os dois: jogo original, <b>UE4SS</b> e <b>ZeroCompanyMP</b> instalados (página MODS), e esta página aberta no Chrome/Edge.</li>
+        <li><b>Anfitrião:</b> na secção <b>Co-op em 2 PCs</b> carrega em <b>CRIAR SESSÃO</b> e envia o código ao convidado.</li>
+        <li><b>Convidado:</b> escreve o código e carrega em <b>ENTRAR</b>. Os dois ficam LIGADO.</li>
+        <li>Antes da missão o <b>anfitrião</b> carrega em <b>ENVIAR SAVE AO CONVIDADO</b> (escolhe a pasta <b>%LOCALAPPDATA%\SWZeroCompany\Saved\SaveGames</b>).
+            O <b>convidado</b> carrega em <b>GUARDAR SAVE RECEBIDO</b> (a mesma pasta — os saves dele ficam numa cópia de segurança), abre o jogo e carrega em <b>Continuar</b>.</li>
+        <li>Os dois entram no mesmo combate. O anfitrião escolhe na secção <b>Co-op</b> quem é J1 (ele) e J2 (o convidado).</li>
+        <li>Em cada ronda: o anfitrião joga os J1 e carrega em <b>Terminar turno</b>; o convidado joga os J2 no jogo dele e carrega em <b>Terminar turno</b>;
+            a IA joga no PC do anfitrião. O jogo do anfitrião decide os resultados e o do convidado é corrigido (as unidades do outro aparecem a teleportar).</li>
+      </ol>
+      <div class="g-note">BETA: ainda não foi testado entre duas casas. Fora do combate só o anfitrião joga; para a missão seguinte repete o envio do save.
+      Não feches esta página durante o jogo.</div></div>
     </details>
 
     <details>
@@ -524,6 +535,31 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <span id="coop-info" style="font-size:12px;color:var(--fg2)"></span>
     </div>
     <div id="coop-units" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"></div>
+  </div>
+
+  <!-- ── Co-op em dois PCs (cada um com o seu jogo) ── -->
+  <div id="net-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      🌐 Co-op em 2 PCs <span id="net-state" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">desligado</span>
+      <span style="font-size:10px;color:#f59e0b;font-family:'Exo 2',sans-serif;letter-spacing:.04em">BETA</span>
+    </h2>
+    <p style="font-size:12px;color:var(--fg2);line-height:1.7;margin-bottom:12px">
+      Cada um joga no seu PC com o seu jogo original. O <b style="color:var(--fg)">anfitrião</b> leva a campanha; o seu jogo decide os resultados.
+      O <b style="color:var(--fg)">convidado</b> joga os personagens J2 no jogo dele — as ações dele repetem-se no jogo do anfitrião e o estado volta para ele.
+      Deixa esta página aberta durante o jogo (é ela que liga os dois jogos).
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="install-btn" id="net-host" style="flex:0 0 auto;padding:9px 18px">⚔ CRIAR SESSÃO (anfitrião)</button>
+      <input id="net-code" placeholder="Código do anfitrião" maxlength="8" style="flex:0 1 170px;min-width:0;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:13px;letter-spacing:.15em;text-transform:uppercase">
+      <button class="install-btn" id="net-join" style="flex:0 0 auto;padding:9px 18px">👥 ENTRAR (convidado)</button>
+      <button class="install-btn" id="net-leave" style="flex:0 0 auto;padding:9px 18px;display:none">■ SAIR</button>
+    </div>
+    <div id="net-info" style="font-size:12px;color:var(--fg2);margin-top:10px"></div>
+    <div id="net-save-row" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
+      <button class="install-btn" id="net-save-send" style="flex:0 0 auto;padding:9px 18px;display:none">📤 ENVIAR SAVE AO CONVIDADO</button>
+      <button class="install-btn" id="net-save-recv" style="flex:0 0 auto;padding:9px 18px;display:none">📥 GUARDAR SAVE RECEBIDO</button>
+      <span id="net-save-info" style="font-size:12px;color:var(--fg2)"></span>
+    </div>
   </div>
 </section>
 
@@ -2379,6 +2415,124 @@ document.getElementById('coop-units').addEventListener('click',function(e){
   var o={}; o[b.dataset.n]=Number(b.dataset.coopOwner); _coopCmd('owners',o);
 });
 setInterval(_coopPoll,3000);
+// ── Co-op em 2 PCs: os dois portais ligam-se por WebRTC (PeerJS, só a apresentação passa pelo servidor público do
+// PeerJS; os dados vão direto entre os PCs) e cada portal faz a ponte com o mod do seu PC:
+// mp_net_out.json (mod→rede), mp_net_in.json (rede→mod), mp_net_cmd.json (liga/desliga + papel) ──
+var NET_DIR=UE4SS_MODS+'/ZeroCompanyMP/Scripts/';
+var _net={peer:null,conn:null,role:null,sentSeq:0,inMsgs:[],timer:null,saveFiles:null};
+function _netInfo(t){ document.getElementById('net-info').textContent=t; }
+function _netState(t,ok){ var s=document.getElementById('net-state'); s.textContent=t; s.style.color=ok?'#4ade80':''; }
+function _netLoadPeer(){
+  if(window.Peer) return Promise.resolve();
+  return new Promise(function(res,rej){
+    var sc=document.createElement('script'); sc.src='/vendor/peerjs.min.js';   // peerjs 1.5.4, alojado no site
+    sc.integrity='sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR'; sc.crossOrigin='anonymous';
+    sc.onload=res; sc.onerror=function(){ rej(new Error('não foi possível carregar o PeerJS')); }; document.head.appendChild(sc);
+  });
+}
+async function _netCmd(on){
+  var root=await _getModsDir(); if(!root) return;
+  await _writeFile(root,NET_DIR+'mp_net_cmd.json',JSON.stringify({cmd:on?'on':'off',role:_net.role,ts:Math.floor(Date.now()/1000)}));
+}
+// mod → outro PC: reencaminha as mensagens novas de mp_net_out.json; outro PC → mod: acumula em mp_net_in.json
+async function _netPump(){
+  if(!_net.conn||!_net.conn.open||!_modsDir) return;
+  try{
+    var txt=await _readText(_modsDir,NET_DIR+'mp_net_out.json'); if(!txt) return;
+    var d=JSON.parse(txt), fresh=(d.msgs||[]).filter(function(m){ return m.seq>_net.sentSeq; });
+    // o mod recomeça a contagem quando o jogo reinicia
+    if(!fresh.length&&d.msgs&&d.msgs.length&&d.msgs[d.msgs.length-1].seq<_net.sentSeq) { _net.sentSeq=0; return; }
+    fresh.forEach(function(m){ _net.conn.send({k:'mod',m:m}); _net.sentSeq=m.seq; });
+  }catch(e){}
+}
+var _netInSeq=0;
+async function _netDeliver(m){
+  m.seq=++_netInSeq;           // numeração própria do lado de quem recebe (o mod só aceita seq crescentes)
+  _net.inMsgs.push(m); if(_net.inMsgs.length>40) _net.inMsgs.shift();
+  try{ await _writeFile(_modsDir,NET_DIR+'mp_net_in.json',JSON.stringify({msgs:_net.inMsgs,ts:Math.floor(Date.now()/1000)})); }catch(e){}
+}
+function _netWire(conn){
+  _net.conn=conn;
+  conn.on('open',async function(){
+    _netState('LIGADO',true);
+    _netInfo(_net.role==='host'?'Convidado ligado. Envia-lhe o save antes da missão e joga — os J2 são dele (escolhe na secção Co-op).':'Ligado ao anfitrião. Guarda o save que ele enviar, abre o jogo e carrega em Continuar.');
+    document.getElementById('net-save-row').style.display='flex';
+    document.getElementById('net-save-send').style.display=_net.role==='host'?'':'none';
+    // o seq de quem recebe recomeça acima do último que o mod já viu; o que já estava em mp_net_out.json não se envia
+    _netInSeq=Math.floor(Date.now()/1000);
+    try{ var o=JSON.parse(await _readText(_modsDir,NET_DIR+'mp_net_out.json')||'{}'); (o.msgs||[]).forEach(function(m){ _net.sentSeq=Math.max(_net.sentSeq,m.seq); }); }catch(e){}
+    await _netCmd(true);
+    clearInterval(_net.timer); _net.timer=setInterval(_netPump,400);
+  });
+  conn.on('data',function(d){
+    if(!d||typeof d!=='object') return;
+    if(d.k==='mod') _netDeliver(d.m);
+    else if(d.k==='save'){ _net.saveFiles=d.files; document.getElementById('net-save-recv').style.display='';
+      document.getElementById('net-save-info').textContent='Save recebido ('+d.files.length+' ficheiros) — carrega em GUARDAR SAVE RECEBIDO.'; }
+  });
+  conn.on('close',function(){ _netState('desligado'); _netInfo('Ligação terminada.'); clearInterval(_net.timer); _netCmd(false); });
+  conn.on('error',function(e){ _netInfo('Erro na ligação: '+(e&&e.message||e)); });
+}
+async function _netStart(role){
+  try{
+    if(!(await _getModsDir())) return;
+    await _netLoadPeer();
+    _netLeave(true);
+    _net.role=role;
+    var code=role==='host'?Math.random().toString(36).slice(2,8).toUpperCase():document.getElementById('net-code').value.trim().toUpperCase();
+    if(role==='client'&&code.length<4){ _netInfo('Escreve o código que o anfitrião te deu.'); return; }
+    _net.peer=role==='host'?new Peer('swmp-coop-'+code):new Peer();
+    _net.peer.on('error',function(e){ _netInfo('Erro: '+(e.type==='peer-unavailable'?'código não encontrado — confirma com o anfitrião':(e.message||e.type))); });
+    document.getElementById('net-leave').style.display='';
+    if(role==='host'){
+      _net.peer.on('open',function(){ _netState('à espera'); _netInfo('Código da sessão: '+code+' — envia-o ao convidado.'); document.getElementById('net-code').value=code; });
+      _net.peer.on('connection',function(c){ if(_net.conn&&_net.conn.open){ c.close(); return; } _netWire(c); });
+    }else{
+      _net.peer.on('open',function(){ _netState('a ligar'); _netWire(_net.peer.connect('swmp-coop-'+code,{reliable:true})); });
+    }
+  }catch(e){ _netInfo('Erro: '+e.message); }
+}
+function _netLeave(quiet){
+  clearInterval(_net.timer);
+  try{ _net.conn&&_net.conn.close(); }catch(e){} try{ _net.peer&&_net.peer.destroy(); }catch(e){}
+  if(_net.role&&!quiet) _netCmd(false);
+  _net.peer=_net.conn=null; _net.sentSeq=0; _net.inMsgs=[];
+  if(!quiet){ _netState('desligado'); _netInfo(''); document.getElementById('net-leave').style.display='none'; document.getElementById('net-save-row').style.display='none'; }
+}
+// saves: %LOCALAPPDATA%\SWZeroCompany\Saved\SaveGames — o anfitrião envia, o convidado guarda (com cópia de segurança)
+async function _netSaveDir(){
+  alert('Escolhe a pasta dos saves do jogo:\n%LOCALAPPDATA%\\SWZeroCompany\\Saved\\SaveGames\n\n(cola esse caminho na barra do Explorador)');
+  return await window.showDirectoryPicker({mode:'readwrite',id:'swmp-saves'});
+}
+async function _netSaveSend(){
+  var info=document.getElementById('net-save-info');
+  try{
+    var dir=await _netSaveDir(), files=[];
+    for await (var [name,h] of dir.entries()){ if(h.kind==='file'&&/\.sav$/i.test(name)){ var f=await h.getFile(); files.push({name:name,t:f.lastModified,data:await f.arrayBuffer()}); } }
+    if(!files.length){ info.textContent='Esta pasta não tem saves (.sav).'; return; }
+    files.sort(function(a,b){return a.t-b.t;});
+    _net.conn.send({k:'save',files:files});
+    info.textContent='Save enviado ('+files.length+' ficheiros).';
+  }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
+}
+async function _netSaveRecv(){
+  var info=document.getElementById('net-save-info');
+  try{
+    var dir=await _netSaveDir();
+    var bk=await dir.getDirectoryHandle('swmp_backup_'+new Date().toISOString().replace(/[:.]/g,'-'),{create:true}), n=0;
+    for await (var [name,h] of dir.entries()){ if(h.kind==='file'&&/\.sav$/i.test(name)){ var w=await (await bk.getFileHandle(name,{create:true})).createWritable(); await w.write(await (await h.getFile()).arrayBuffer()); await w.close(); n++; } }
+    for(var i=0;i<_net.saveFiles.length;i++){   // do mais antigo para o mais recente: o "Continuar" do jogo pega no último
+      var f=_net.saveFiles[i], w2=await (await dir.getFileHandle(f.name,{create:true})).createWritable(); await w2.write(f.data); await w2.close();
+    }
+    info.textContent='Save guardado ('+_net.saveFiles.length+' ficheiros; os teus '+n+' ficaram em '+bk.name+'). Abre o jogo e carrega em Continuar.';
+    document.getElementById('net-save-recv').style.display='none';
+  }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
+}
+document.getElementById('net-host').addEventListener('click',function(){ _netStart('host'); });
+document.getElementById('net-join').addEventListener('click',function(){ _netStart('client'); });
+document.getElementById('net-leave').addEventListener('click',function(){ _netLeave(); });
+document.getElementById('net-save-send').addEventListener('click',_netSaveSend);
+document.getElementById('net-save-recv').addEventListener('click',_netSaveRecv);
 // ── Batalha Rápida: o mod lê mp_qb_cmd.json; a lista de mapas vem do jogo (mp_qb_worlds.json), o estado de mp_qb.json ──
 var QB_CMD_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb_cmd.json';
 var QB_STATE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb.json';

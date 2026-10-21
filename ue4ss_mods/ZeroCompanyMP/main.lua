@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.21
+-- ZeroCompanyMP/main.lua — v0.22
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.21 carregado")
+print(" ZeroCompanyMP v0.22 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -1239,6 +1239,350 @@ pcall(function()
     print("[ZeroCompanyMP] Co-op: F9 liga/desliga")
 end)
 
+-- ─── Co-op em dois PCs (cada um com o seu jogo) ──────────────────────────────────────────────────────
+-- O portal de cada PC liga-se ao do outro (WebRTC) e faz a ponte com o mod por ficheiros:
+--   mp_net_cmd.json  {"cmd":"on|off","role":"host|client","ts":N}   (portal → mod)
+--   mp_net_out.json  {"msgs":[{seq,...}],"ts":N}                      (mod → portal → outro PC)
+--   mp_net_in.json   {"msgs":[{seq,...}],"ts":N}                      (outro PC → portal → mod)
+-- O HOST decide tudo: corre o co-op normal (vez do J1 = host, vez do J2 = convidado, depois a IA). As ações do
+-- convidado chegam como {t="act"} e o host repete-as: movimento = TeleportActor; habilidade = alvo por
+-- SetAITargetingDataOverride + TryActivatePlannedAbility + IA_ConfirmTarget (testado 21/10: dispara, acerta e mata
+-- pelo caminho normal do jogo). Depois de cada ação o host manda {t="snap"} (posições, vida, PA, mortos, vez).
+-- O CONVIDADO joga os seus (dono 2) no jogo dele; ali o dano não conta (IncomingDamageMultiplier = 0) e a IA não
+-- age (grupo da IA trocado pelo do jogador): tudo o que importa vem dos snaps do host.
+local NET_CMD, NET_OUT, NET_IN = MOD_PATH .. "\\mp_net_cmd.json", MOD_PATH .. "\\mp_net_out.json", MOD_PATH .. "\\mp_net_in.json"
+local net = { on = false, role = nil, cmd_ts = 0, out = {}, seq = 0, in_seq = 0, queue = {}, busy_until = 0,
+              phase = 1, owners = {}, snap_due = 0, hooked = false, pending = {}, ap_seen = {}, last_act = {} }
+do local raw = read_file(NET_CMD); if raw then net.cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
+do local raw = read_file(NET_OUT); if raw then local ok, d = pcall(json.decode, raw)     -- a numeração continua
+    if ok and type(d) == "table" and type(d.msgs) == "table" then for _, m in ipairs(d.msgs) do net.seq = math.max(net.seq, tonumber(m.seq) or 0) end end end end
+do local raw = read_file(NET_IN); if raw then local ok, d = pcall(json.decode, raw)
+    if ok and type(d) == "table" and type(d.msgs) == "table" then for _, m in ipairs(d.msgs) do net.in_seq = math.max(net.in_seq, tonumber(m.seq) or 0) end end end end
+
+local NET_SKIP = { GA_TeamTurnEnd_C = 1, GA_TeamTurnStart_C = 1, GA_TacticalEncounterEnded_C = 1, GA_TacticalEncounterStarted_C = 1,
+    GA_OnJoinedCombat_C = 1, GA_UnitDamageListener_C = 1, GA_InjuryListener_C = 1, GA_OverwatchCancellationListener_C = 1,
+    GA_EvasionListener_C = 1, GA_OutOfHealth_C = 1, GA_Displaced_C = 1, GA_ProgressionHealthManager_C = 1, GA_Passive_Difficulty_C = 1 }
+
+local function net_send(msg)
+    net.seq = net.seq + 1
+    msg.seq = net.seq
+    net.out[#net.out + 1] = msg
+    while #net.out > 40 do table.remove(net.out, 1) end
+    write_file(NET_OUT, json.encode({ msgs = net.out, ts = os.time() }))
+end
+
+local function unit_by_name(n)
+    for _, c in ipairs(level_units()) do if c:GetFName():ToString() == n then return c end end
+end
+
+local function attr_set(u, set_name)
+    local found
+    pcall(function()
+        u.AbilitySystemComponent.SpawnedAttributes:ForEach(function(_, e)
+            local s = e:get()
+            if valid(s) and s:GetClass():GetFName():ToString() == set_name then found = s end
+        end)
+    end)
+    return found
+end
+
+-- estado de todas as unidades do mapa (o host manda isto ao convidado)
+local function net_snapshot()
+    local st, su = pvp_statics()
+    local units = {}
+    for _, c in ipairs(level_units()) do
+        local l, r = c:K2_GetActorLocation(), c:K2_GetActorRotation()
+        local cs = attr_set(c, "BitReactorCombatSet")
+        local u = { n = c:GetFName():ToString(), x = l.X, y = l.Y, z = l.Z, yaw = r.Yaw, hp = c:GetHealth(),
+                    team = team_name(st, c), dead = su:IsUnitDead(c) }
+        if cs then u.ap = cs.ActionPoints.CurrentValue; u.map = cs.MovementActionPoints.CurrentValue end
+        units[#units + 1] = u
+    end
+    local owners = {}
+    for n, o in pairs(coop.owners) do owners[n] = o end
+    net_send({ t = "snap", phase = coop.phase, owners = owners, units = units })
+end
+
+-- convidado: aplica o estado do host
+local function net_apply_snap(m)
+    local _, su = pvp_statics()
+    net.phase = tonumber(m.phase) or net.phase
+    if type(m.owners) == "table" then net.owners = m.owners end
+    local by = {}
+    for _, c in ipairs(level_units()) do by[c:GetFName():ToString()] = c end
+    for _, u in ipairs(m.units or {}) do
+        local c = by[u.n]
+        if c and valid(c) then
+            if u.dead then
+                if not su:IsUnitDead(c) then pcall(function() c:K2_DestroyActor() end) end
+            else
+                local l = c:K2_GetActorLocation()
+                if math.abs(l.X - u.x) > 30 or math.abs(l.Y - u.y) > 30 then
+                    pcall(function() su:TeleportActor(c, { X = u.x, Y = u.y, Z = u.z }, { Pitch = 0, Yaw = u.yaw or 0, Roll = 0 }, false, true) end)
+                end
+                local hs = attr_set(c, "BitReactorHealthSet")
+                if hs and u.hp then pcall(function() hs.Health.BaseValue = u.hp; hs.Health.CurrentValue = u.hp end) end
+                -- PA: das unidades que não são do convidado sempre; das dele só quando a vez dele começa
+                local cs = attr_set(c, "BitReactorCombatSet")
+                if cs and u.ap and (tonumber(net.owners[u.n]) ~= 2 or m.phase_start) then
+                    pcall(function() cs.ActionPoints.CurrentValue = u.ap; cs.MovementActionPoints.CurrentValue = u.map or 0 end)
+                end
+            end
+        end
+    end
+    -- referência para detetar a próxima ação que gaste PA (todas as unidades do mapa, estejam ou não no estado)
+    for _, c in ipairs(level_units()) do
+        local cs = attr_set(c, "BitReactorCombatSet")
+        if cs then pcall(function() net.ap_seen[c:GetFName():ToString()] = cs.ActionPoints.CurrentValue + cs.MovementActionPoints.CurrentValue end) end
+    end
+end
+
+-- convidado: no jogo dele o dano não conta (só o host decide quem leva dano e quem morre)
+local function net_client_no_damage()
+    for _, c in ipairs(level_units()) do
+        local hs = attr_set(c, "BitReactorHealthSet")
+        if hs then pcall(function() hs.IncomingDamageMultiplier.BaseValue = 0; hs.IncomingDamageMultiplier.CurrentValue = 0 end) end
+    end
+end
+
+-- host: seleciona a unidade que vai agir (o IA_ConfirmTarget confirma a mira da unidade selecionada)
+local function net_select(u)
+    local comp, sel = coop_selected()
+    if not comp then return end
+    local want = u:GetFName():ToString()
+    for _ = 1, 10 do
+        if sel and sel:GetFName():ToString() == want then return true end
+        pcall(function() comp:SelectNextCharacter() end)
+        local ok, s = pcall(function() return comp:GetSelectedCharacter() end)
+        sel = (ok and valid(s)) and s or nil
+    end
+end
+
+local function net_confirm()
+    local ia = StaticFindObject("/Game/Game/Input/Actions/IA_ConfirmTarget.IA_ConfirmTarget")
+    local sub
+    for _, x in ipairs(FindAllOf("EnhancedInputLocalPlayerSubsystem") or {}) do if valid(x) then sub = x end end
+    if valid(ia) and sub then pcall(function() sub:InjectInputVectorForAction(ia, { X = 1.0, Y = 0.0, Z = 0.0 }, {}, {}) end) end
+end
+
+-- host: repete uma ação do convidado
+local function net_replay(m)
+    local u = unit_by_name(m.unit or "")
+    if not (u and valid(u)) then print("[ZeroCompanyMP] 2PCs: unidade desconhecida " .. tostring(m.unit)); return end
+    if (coop.owners[m.unit] or 1) ~= 2 or coop.phase ~= 2 then print("[ZeroCompanyMP] 2PCs: ação fora da vez ignorada (" .. tostring(m.unit) .. ")"); return end
+    local _, su = pvp_statics()
+    if m.ab and m.ab:find("Move") then
+        if m.x then pcall(function() su:TeleportActor(u, { X = m.x, Y = m.y, Z = m.z }, { Pitch = 0, Yaw = m.yaw or 0, Roll = 0 }, false, true) end) end
+        local cs = attr_set(u, "BitReactorCombatSet")
+        if cs and m.ap then pcall(function() cs.ActionPoints.CurrentValue = m.ap; cs.MovementActionPoints.CurrentValue = m.map or 0 end) end
+        print(("[ZeroCompanyMP] 2PCs: %s moveu-se"):format(m.unit))
+        net.snap_due = os.clock() + 0.5
+        return
+    end
+    local asc = u.AbilitySystemComponent
+    local cls
+    pcall(function() asc.ActivatableAbilities.Items:ForEach(function(_, e)
+        local s = e:get()
+        local ok, n = pcall(function() return s.Ability:GetClass():GetFName():ToString() end)
+        if ok and n == m.ab then cls = s.Ability:GetClass() end
+    end) end)
+    if not cls then print("[ZeroCompanyMP] 2PCs: " .. m.unit .. " não tem " .. tostring(m.ab)); return end
+    net_select(u)
+    local lib = StaticFindObject("/Script/GameplayAbilities.Default__AbilitySystemBlueprintLibrary")
+    local tgt = m.target and unit_by_name(m.target)
+    local ok, r = pcall(function()
+        if tgt and valid(tgt) then
+            asc:SetSuggestedTarget(tgt)                       -- a mira abre neste alvo (o override sozinho não chega)
+            asc:SetAITargetingDataOverride(lib:AbilityTargetDataFromActor(tgt))
+        end
+        return asc:TryActivatePlannedAbility(asc:GetAbilitySpecHandleFromClass(cls, false), nil)
+    end)
+    print(("[ZeroCompanyMP] 2PCs: %s usa %s em %s (%s)"):format(m.unit, m.ab, tostring(m.target), ok and tostring(r) or ("ERRO " .. tostring(r))))
+    net.busy_until = os.clock() + 12                       -- espera pela mira + animação antes da próxima ação
+    net.snap_due = os.clock() + 10
+    -- a mira abre no alvo por omissão (o alvo da mira aberta lê-se em GetSuggestedTarget, um frame depois de abrir):
+    -- troca (TAB do jogo) até ser o pedido e confirma. Se não chegar lá, dispara no que houver e regista (os dois
+    -- jogos estão no mesmo estado, por isso a mira deve abrir no mesmo alvo — confirmar no teste real).
+    local function cur()
+        local n
+        pcall(function() local a = asc:GetSuggestedTarget(); if valid(a) then n = a:GetFName():ToString() end end)
+        return n
+    end
+    local function inject(path)
+        local ia = StaticFindObject(path)
+        local sub
+        for _, x in ipairs(FindAllOf("EnhancedInputLocalPlayerSubsystem") or {}) do if valid(x) then sub = x end end
+        if valid(ia) and sub then pcall(function() sub:InjectInputVectorForAction(ia, { X = 1.0, Y = 0.0, Z = 0.0 }, {}, {}) end) end
+    end
+    local tries = 0
+    local function step()
+        in_game_thread(function()
+            local c = cur()
+            print(("[ZeroCompanyMP] 2PCs: mira de %s passo %d: %s (pedido %s)"):format(m.unit, tries, tostring(c), tostring(m.target)))
+            if not c and tries < 10 then tries = tries + 1; ExecuteWithDelay(300, step); return end   -- mira ainda a abrir
+            if not m.target or not c or c == m.target then net_confirm(); return end
+            if tries >= 18 then
+                print(("[ZeroCompanyMP] 2PCs: AVISO alvo %s não apareceu na mira de %s — disparou em %s"):format(m.target, m.unit, tostring(c)))
+                net_confirm()
+                return
+            end
+            tries = tries + 1
+            inject(tries % 2 == 1 and "/Game/Game/Input/Actions/IA_SelectNextTarget.IA_SelectNextTarget"
+                                   or "/Game/Game/Input/Actions/IA_SelectNextTarget_OTS.IA_SelectNextTarget_OTS")
+            ExecuteWithDelay(400, step)
+        end)
+    end
+    ExecuteWithDelay(500, step)
+end
+
+-- capturas (as duas pontas): no fim de cada habilidade guarda só a instância; lê-se fora do gancho
+local function net_hook()
+    if net.hooked then return end
+    net.hooked = pcall(function()
+        -- habilidade paga (custo cobrado) = ação real; no gancho só se guarda a referência (ler mais crasha)
+        RegisterHook("/Script/BitReactorGame.BitReactorAbilitySystemComponent:HandleAbilityCommitted", function(_, ab)
+            if not net.on then return end
+            local ok, a = pcall(function() return ab:get() end)
+            if ok and a then net.pending[#net.pending + 1] = { a = a, t = os.clock() } end
+        end)
+        -- a habilidade que o jogador escolheu (ex. GA_StandardShot_*): a paga costuma ser a "PFA" que ela lança
+        RegisterHook("/Script/BitReactorGame.BitReactorAbilitySystemComponent:HandleAbilityActivated", function(_, ab)
+            if not net.on then return end
+            local ok, a = pcall(function() return ab:get() end)
+            if ok and a then net.pending[#net.pending + 1] = { a = a, t = os.clock(), act = true } end
+        end)
+        RegisterHook("/Game/Game/Core/Blueprints/BP_BrunoGameplayMaster.BP_BrunoGameplayMaster_C:RequestEndTurn", function()
+            if not net.on then return end
+            if net.role == "client" then
+                if net.phase == 2 then net_send({ t = "endphase" }); print("[ZeroCompanyMP] 2PCs: fim da minha vez enviado ao host") end
+            else
+                net.snap_due = os.clock() + 2
+                net.phase_start = true
+            end
+        end)
+    end)
+end
+
+-- processa as habilidades pagas (fora do gancho). Convidado: manda {t="act"} das suas unidades na sua vez, se a
+-- ação gastou PA; movimento só quando a unidade parou (posição final). Host: qualquer ação → manda o estado.
+local function net_process_pending()
+    local keep = {}
+    for _, p in ipairs(net.pending) do
+        local a = p.a
+        if valid(a) then
+            local cn = a:GetClass():GetFName():ToString()
+            local owner
+            pcall(function() owner = a:GetOwningActorFromActorInfo() end)
+            if p.act then
+                -- ativação: lembra a escolha do jogador (não as "PFA", que são lançadas por ela)
+                if not NET_SKIP[cn] and not cn:find("PFA") and valid(owner) then net.last_act[owner:GetFName():ToString()] = { cn = cn, t = p.t } end
+            elseif not NET_SKIP[cn] and valid(owner) and owner:GetFullName():find(":PersistentLevel%.") then
+                local on = owner:GetFName():ToString()
+                if net.role ~= "client" then
+                    net.snap_due = os.clock() + 4              -- deixa a animação acabar antes de mandar o estado
+                    local tn
+                    pcall(function() local ta = a.TargetActor; if valid(ta) then tn = ta:GetFName():ToString() end end)
+                    local la = net.last_act[on]
+                    print(("[ZeroCompanyMP] 2PCs: [host] %s escolheu %s, pagou %s → %s"):format(on, la and la.cn or "?", cn, tostring(tn)))
+                elseif tonumber(net.owners[on]) == 2 and net.phase == 2 then
+                    local l, r = owner:K2_GetActorLocation(), owner:K2_GetActorRotation()
+                    local moving = cn:find("Move") and (not p.lx or math.abs(p.lx - l.X) + math.abs(p.ly - l.Y) > 5) and os.clock() - p.t < 20
+                    if moving then
+                        p.lx, p.ly = l.X, l.Y; keep[#keep + 1] = p     -- ainda a andar: volta a ver no próximo ciclo
+                    else
+                        local cs = attr_set(owner, "BitReactorCombatSet")
+                        local ap, map = 0, 0
+                        if cs then ap, map = cs.ActionPoints.CurrentValue, cs.MovementActionPoints.CurrentValue end
+                        local last = net.ap_seen[on]
+                        net.ap_seen[on] = ap + map
+                        if not last or ap + map < last - 0.01 then
+                            local m = { t = "act", unit = on, ab = cn, ap = ap, map = map, x = l.X, y = l.Y, z = l.Z, yaw = r.Yaw }
+                            local la = net.last_act[on]
+                            if la and p.t - la.t < 15 and not cn:find("Move") then m.ab = la.cn; m.paid = cn end
+                            pcall(function() local ta = a.TargetActor; if valid(ta) then m.target = ta:GetFName():ToString() end end)
+                            net_send(m)
+                            print(("[ZeroCompanyMP] 2PCs: enviado %s %s → %s"):format(on, cn, tostring(m.target)))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    net.pending = keep
+end
+
+local function net_set(on, role)
+    if on then
+        if not check_genuine() then print("[ZeroCompanyMP] 2PCs recusado — jogo não verificado como original: " .. genuine_why); return end
+        net.role = (role == "client") and "client" or "host"
+        net.on = true
+        if net.role == "client" and coop_on then coop_set(false) end   -- no convidado a vez vem do host
+        net_hook()
+        print("[ZeroCompanyMP] 2PCs LIGADO como " .. (net.role == "host" and "ANFITRIÃO" or "CONVIDADO"))
+    else
+        net.on = false
+        print("[ZeroCompanyMP] 2PCs DESLIGADO")
+    end
+end
+
+local function net_poll()
+    local raw = read_file(NET_CMD)
+    if raw then
+        local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+        if ts > net.cmd_ts then
+            net.cmd_ts = ts
+            local ok, c = pcall(json.decode, raw)
+            if ok and type(c) == "table" then net_set(c.cmd == "on", c.role) end
+        end
+    end
+    if not net.on then return end
+    -- mensagens do outro PC
+    local rin = read_file(NET_IN)
+    if rin then
+        local ok, d = pcall(json.decode, rin)
+        if ok and type(d) == "table" and type(d.msgs) == "table" then
+            for _, m in ipairs(d.msgs) do
+                local s = tonumber(m.seq) or 0
+                if s > net.in_seq then
+                    net.in_seq = s
+                    if net.role == "host" then
+                        if m.t == "act" then net.queue[#net.queue + 1] = m
+                        elseif m.t == "endphase" and coop_on and coop.phase == 2 then
+                            for _, gm in ipairs(FindAllOf("BP_BrunoGameplayMaster_C") or {}) do
+                                if valid(gm) and not gm:GetFullName():find("Default__") then pcall(function() gm:RequestEndTurn() end); break end
+                            end
+                        end
+                    elseif m.t == "snap" then
+                        local okA, e = pcall(net_apply_snap, m)
+                        if not okA then print("[ZeroCompanyMP] 2PCs erro ao aplicar estado: " .. tostring(e)) end
+                    end
+                end
+            end
+        end
+    end
+    pcall(net_process_pending)
+    if not combat_active then return end
+    if net.role == "host" then
+        if not coop_on then coop_set(true) end              -- o host corre o co-op normal (vez J1 / vez J2)
+        if #net.queue > 0 and os.clock() >= net.busy_until then
+            local m = table.remove(net.queue, 1)
+            pcall(net_replay, m)
+        end
+        if net.snap_due > 0 and os.clock() >= net.snap_due then
+            net.snap_due = 0
+            local okS, e = pcall(net_snapshot)
+            if okS and net.phase_start then net.out[#net.out].phase_start = true; net.phase_start = false
+                write_file(NET_OUT, json.encode({ msgs = net.out, ts = os.time() })) end
+            if not okS then print("[ZeroCompanyMP] 2PCs snap erro: " .. tostring(e)) end
+        end
+    else
+        -- convidado: sem IA local e sem dano local (uma vez por combate)
+        if not pvp.sub or not valid(pvp.sub) then
+            if pvp_turn_order(true) then net_client_no_damage() end
+        end
+    end
+end
+
 -- ─── Batalha Rápida: mapa escolhido → esquadrão → combate direto ──────────────
 -- Usa o lançamento rápido que os programadores deixaram no jogo (B_QuickLaunchViewModel + BRG_MissionTestingSettings).
 -- O portal escreve mp_qb_cmd.json {"cmd":"launch","world":"/Game/.../SK_Ryloth_010_Root.SK_Ryloth_010_Root","pvp":bool,"ts":N};
@@ -1517,6 +1861,7 @@ local function tick()
     pcall(poll)
     pcall(pvp_poll)
     pcall(coop_poll)
+    pcall(net_poll)
     pcall(qb_poll)
     pcall(qb_after_combat_start)
     if scene_tick % 2 == 0 then pcall(update_scene); pcall(ig_tick); pcall(apply_music_mute) end
