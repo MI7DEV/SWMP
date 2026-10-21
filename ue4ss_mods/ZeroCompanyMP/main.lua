@@ -1520,6 +1520,14 @@ local function net_set(on, role)
         net_hook()
         print("[ZeroCompanyMP] 2PCs LIGADO como " .. (net.role == "host" and "ANFITRIÃO" or "CONVIDADO"))
     else
+        -- convidado: devolve o turno à IA e o dano normal (senão o jogo fica sem turno inimigo)
+        if net.role == "client" then
+            pcall(function() pvp_turn_order(false) end)
+            for _, c in ipairs(level_units()) do
+                local hs = attr_set(c, "BitReactorHealthSet")
+                if hs then pcall(function() hs.IncomingDamageMultiplier.BaseValue = 1; hs.IncomingDamageMultiplier.CurrentValue = 1 end) end
+            end
+        end
         net.on = false
         print("[ZeroCompanyMP] 2PCs DESLIGADO")
     end
