@@ -108,3 +108,16 @@
 - Sondas em `tools/quickbattle_probe*.lua`. **Regra**: nunca chamar métodos em objeto nulo (`GetClass`,
   `GetFName`, `GetMetaClass`…) — a UE4SS crasha e o pcall não apanha. Usar só unidades com `:PersistentLevel.` no nome.
 - Crash reports do jogo: `%LOCALAPPDATA%\SWZeroCompany\Saved\Crashes\*\CrashContext.runtime-xml` (pilha legível).
+
+## Aftermath (21/10/2026)
+- Jogo no build Steam 25898267. **Aftermath DLC 8.8.3** (manifest `gamebuild=25513890`) crasha no arranque:
+  `ObjectSerializationError … BP_BrunoGameInstance … Bad export index` — o mod traz o seu próprio BP_BrunoGameInstance
+  compilado para o build antigo. Corrigir sem o projeto do autor exigiria retirar/reconstruir esse BP (e é lá que o
+  Aftermath liga a campanha) — não compensa.
+- **Aftermath Redux 14.4.3** (catálogo, `AftermathRedux-14.4.3-PT/EN.zip` no release `mods` do SWMP-files): 3814 ficheiros
+  (8.8.3 tem 2157), também traz BP_BrunoGameInstance mas **carrega sem crash** neste build; assets novos carregam
+  (ex. SpawnGroup `SG_AM_SlugRat_T11_Medium_Striker`) e uma batalha corre ronda completa. Falta testar a campanha
+  Endgame/Aftermath a jogar. Instalado em `Content/Paks/~mods/Aftermath`; saves copiados para
+  `%LOCALAPPDATA%\SWZeroCompany\Saved\SaveGames_backup_antes_aftermath_20261021_1207`.
+- Ler o conteúdo de um .utoc sem ferramentas externas: índice de diretórios do IoStore (script Python de 60 linhas:
+  cabeçalho 144 B, chunk ids 12 B, offsets 10 B, seeds, blocos 12 B, nomes de compressão, depois o índice).
