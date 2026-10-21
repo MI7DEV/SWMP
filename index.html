@@ -614,6 +614,11 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
         Músicas livres: Holst/Wagner (domínio público, Wikimedia Commons) e Kevin MacLeod (incompetech.com, licença CC BY 4.0).
         Para a Marcha Imperial original, usa <b style="color:var(--fg)">+ TROCAR</b> em “Tema do menu principal” com o teu MP3.</span>
     </div>
+    <div id="mus-game" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
+      <span id="mus-game-state" style="flex:1 1 220px;min-width:0;font-size:12px;color:var(--fg2)">No jogo: ainda não verificado.</span>
+      <button class="install-btn" id="mus-game-check" style="flex:0 0 auto;padding:7px 14px">🔍 VERIFICAR NO JOGO</button>
+      <button class="install-btn" id="mus-game-reset" style="flex:0 0 auto;padding:7px 14px">↩ VOLTAR TUDO AO ORIGINAL</button>
+    </div>
     <div id="mus-count" style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:8px"></div>
     <div id="mus-lists" style="display:flex;flex-direction:column;gap:8px"></div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
@@ -2336,6 +2341,52 @@ async function _musCtrl(force){
   }catch(e){}
 }
 
+// O que o JOGO tem de facto (pasta do jogo), não o que este browser guardou: as trocas podem ter sido feitas
+// noutro browser/endereço ou a memória do browser pode ter sido limpa — e o jogo continua a tocá-las.
+async function _musGameScan(root){
+  var pl=null, files=0;
+  try{ var t=await _readText(root,MUS_PLAYLIST_FILE); if(t) pl=JSON.parse(t); }catch(e){}
+  try{ var d=await _dirAt(root,MUS_GAME_DIR+'/swmp_music',false); if(d) for await (var e2 of d.values()) if(e2.kind==='file') files++; }catch(e){}
+  var inList={};
+  if(pl) [pl.track||{},pl.group||{}].forEach(function(o){ Object.keys(o).forEach(function(k){ (o[k]||[]).forEach(function(f){ inList[f]=1; }); }); });
+  return {on:!!(pl&&pl.on), songs:Object.keys(inList).length, files:files, mute:!!(pl&&pl.mute)};
+}
+async function _musGameCheck(ask){
+  var el=document.getElementById('mus-game-state');
+  var root=ask?await _getModsDir():(_modsDir&&await _modsDir.queryPermission({mode:'readwrite'})==='granted'?_modsDir:null);
+  if(!root){ el.textContent='No jogo: carrega em VERIFICAR NO JOGO para ver o que está trocado.'; return null; }
+  var s=await _musGameScan(root);
+  if(s.on&&s.songs){
+    el.innerHTML='<b style="color:#f59e0b">No jogo: '+s.songs+' músicas trocadas</b> — a trilha SWMP toca ao abrir o jogo'+(s.mute?' e a música original fica em silêncio':'')+'.';
+  }else if(s.files){
+    el.innerHTML='No jogo: música original (há '+s.files+' ficheiros de música antigos na pasta — o ↩ apaga-os).';
+  }else el.innerHTML='<b style="color:#4ade80">No jogo: música original</b> — nada trocado.';
+  return s;
+}
+async function _musGameReset(){
+  var el=document.getElementById('mus-game-state');
+  try{
+    var root=await _getModsDir(); if(!root) return;
+    if(!confirm('Voltar toda a música do jogo ao original?\n\nApaga as músicas copiadas para o jogo e as trocas guardadas nesta página.')) return;
+    if(_mus.on) try{ _musToggle(); }catch(e){}
+    _mus.map={}; await _idbSet('mus:map',_mus.map); await _idbSet('mus:exp',{});
+    // lista vazia e desligada: o mod pára o leitor e repõe o volume original da música do jogo
+    await _writeFile(root,MUS_PLAYLIST_FILE,JSON.stringify({on:false,seq:false,vol:_mus.vol||0.7,mute:false,track:{},group:{},trackGroup:{},sceneGroup:{},chain:{},ts:Math.floor(Date.now()/1000)}));
+    await _writeFile(root,MUS_CTRL_FILE,JSON.stringify({mute:false,ts:Math.floor(Date.now()/1000)}));
+    var d=null, n=0;
+    try{ d=await _dirAt(root,MUS_GAME_DIR+'/swmp_music',false); }catch(x){}   // sem pasta = nada para apagar
+    if(d){ var names=[]; for await (var e of d.values()) if(e.kind==='file') names.push(e.name);
+      for(var i=0;i<names.length;i++){ try{ await d.removeEntry(names[i]); n++; }catch(x){} } }
+    document.getElementById('mus-ingame').checked=false; _idbSet('mus:ingame',false);
+    _musRender();
+    await _musGameCheck(false);
+    _musHint('✓ Música do jogo de volta ao original ('+n+' ficheiros apagados). Com o jogo aberto a troca é imediata; senão, na próxima vez que abrires.');
+  }catch(e){ if(e.name!=='AbortError') el.textContent='Erro: '+e.message; }
+}
+document.getElementById('mus-game-check').addEventListener('click',function(){ _musGameCheck(true); });
+document.getElementById('mus-game-reset').addEventListener('click',_musGameReset);
+setInterval(function(){ if(document.querySelector('.page.on')?.dataset.page==='musica') _musGameCheck(false); },5000);
+setTimeout(function(){ _musGameCheck(false); },1500);
 document.getElementById('mus-play').addEventListener('click',_musToggle);
 document.getElementById('mus-pack').addEventListener('click',function(){_musInstallPack(this);});
 document.getElementById('mus-next').addEventListener('click',_musNext);
