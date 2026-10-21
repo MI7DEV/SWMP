@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.22
+-- ZeroCompanyMP/main.lua — v0.23
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -137,6 +137,23 @@ local function valid(obj)
     return ok and result == true
 end
 
+-- FindAllOf/FindFirstOf percorrem TODOS os objetos do jogo: ~46 ms cada na thread do jogo (medido 21/10 com o
+-- Aftermath, ~8 GB). Chamados a cada segundo davam travões. Guarda o objeto e só volta a procurar quando deixa de
+-- ser válido — e no máximo de "rescan" em "rescan" segundos enquanto não existir.
+local fcache = {}
+local function find_one(cls, rescan, pick)
+    local e = fcache[cls]
+    if e and valid(e.obj) then return e.obj end
+    local now = os.clock()
+    if e and now - e.t < (rescan or 5) then return nil end
+    local obj
+    for _, o in ipairs(FindAllOf(cls) or {}) do
+        if valid(o) and (not pick or pick(o)) then obj = o; break end
+    end
+    fcache[cls] = { obj = obj, t = now }
+    return obj
+end
+
 -- ExecuteWithDelay corre numa thread da UE4SS que não é a do jogo; mexer em objetos do jogo daí crasha
 -- (crash dump de 20/10: acesso nulo na UE4SS ao entrar em combate). Tudo o que toca no jogo passa por aqui.
 local function in_game_thread(fn)
@@ -188,9 +205,7 @@ pcall(process_pending)
 -- ─── Detecção de turno (confirmado pelo jmap) ─────────────────────────────────
 -- BP_BrunoFunctionLibrary:IsPlayerTurn() → retorna tabela com .bIsPlayerTurn
 local function get_turn_state()
-    local gs_list = FindAllOf("TacticalGameState")
-    if not gs_list or #gs_list == 0 then return nil end
-    local gs = gs_list[1]
+    local gs = find_one("TacticalGameState", 5)
     if not valid(gs) then return nil end
 
     local ok_round, round = pcall(function() return gs.CurrentRound end)
@@ -214,15 +229,11 @@ end
 -- BP_BrunoFunctionLibrary:IsPlayerTurn() — confirmado no jmap
 -- retorna nil se não disponível, bool se encontrado
 local function is_player_turn()
-    local libs = FindAllOf("BP_BrunoFunctionLibrary_C")
-    if not libs or #libs == 0 then return nil end
-    for _, lib in ipairs(libs) do
-        if valid(lib) then
-            local ok, result = pcall(function() return lib:IsPlayerTurn() end)
-            if ok and type(result) == "table" and result.bIsPlayerTurn ~= nil then
-                return result.bIsPlayerTurn
-            end
-        end
+    local lib = find_one("BP_BrunoFunctionLibrary_C", 10)
+    if not valid(lib) then return nil end
+    local ok, result = pcall(function() return lib:IsPlayerTurn() end)
+    if ok and type(result) == "table" and result.bIsPlayerTurn ~= nil then
+        return result.bIsPlayerTurn
     end
     return nil
 end
@@ -459,7 +470,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.22 carregado")
+print(" ZeroCompanyMP v0.23 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -476,7 +487,7 @@ local last_track   = ""
 
 local function current_map()
     local ok, name = pcall(function()
-        local w = FindFirstOf("World")
+        local w = find_one("World", 3)
         if not valid(w) then return "" end
         return w:GetFullName()
     end)
@@ -564,8 +575,8 @@ local function detect_scene()
     local map = current_map()
     if game_music ~= "" then return game_music, map end
     -- fallback por classes do SDK: TacticalGameState (missão), StrategyGameState (base/campanha)
-    if valid(FindFirstOf("TacticalGameState")) then return "combat", map end
-    if valid(FindFirstOf("StrategyGameState")) then return "strategy", map end
+    if valid(find_one("TacticalGameState", 5)) then return "combat", map end
+    if valid(find_one("StrategyGameState", 5)) then return "strategy", map end
     return "menu", map
 end
 
@@ -576,9 +587,7 @@ local MUSIC_ORIG = MOD_PATH .. "\\mp_music_orig.txt"
 local muted_now  = nil
 
 local function user_settings()
-    local s = FindFirstOf("BitReactorUserSettingsLocal")
-    if valid(s) then return s end
-    return nil
+    return find_one("BitReactorUserSettingsLocal", 10)
 end
 
 -- ─── Trilha sonora dentro do jogo (sem a página aberta) ───────────────────────
@@ -1058,7 +1067,8 @@ local function pvp_poll()
             if cmd == "on" then pvp_set(true) elseif cmd == "off" then pvp_set(false) elseif cmd == "report" then pcall(pvp_report) end
         end
     end
-    if pvp_on then pcall(pvp_report) end
+    -- o relatório percorre as unidades (FindAllOf): de 5 em 5 s chega para o portal
+    if pvp_on and os.clock() - (pvp.report_t or 0) >= 5 then pvp.report_t = os.clock(); pcall(pvp_report) end
 end
 
 pcall(function()
@@ -1109,12 +1119,10 @@ local function coop_default_owners()
 end
 
 local function coop_selected()
-    for _, c in ipairs(FindAllOf("SelectedCharacterComponent") or {}) do
-        if valid(c) and c:GetFullName():find("PlayerController") then
-            local ok, s = pcall(function() return c:GetSelectedCharacter() end)
-            return c, (ok and valid(s)) and s or nil
-        end
-    end
+    local c = find_one("SelectedCharacterComponent", 3, function(o) return o:GetFullName():find("PlayerController") ~= nil end)
+    if not c then return end
+    local ok, s = pcall(function() return c:GetSelectedCharacter() end)
+    return c, (ok and valid(s)) and s or nil
 end
 
 -- seleciona um personagem do dono da vez (até 8 tentativas — o TAB do jogo percorre o esquadrão)
@@ -1231,7 +1239,8 @@ local function coop_poll()
         local _, sel = coop_selected()
         if sel and (coop.owners[sel:GetFName():ToString()] or 1) ~= coop.phase then coop_select_phase() end
     end
-    if combat_active then pcall(coop_report) end
+    -- só com o co-op ligado e de 5 em 5 s (percorre as unidades; antes corria sempre em combate e dava travões)
+    if coop_on and os.clock() - (coop.report_t or 0) >= 5 then coop.report_t = os.clock(); pcall(coop_report) end
 end
 
 pcall(function()
@@ -1609,7 +1618,7 @@ local function qb_state(status)
 end
 
 local function qb_worlds()
-    local gi = FindFirstOf("GameInstance")
+    local gi = find_one("GameInstance", 10)
     if not valid(gi) then return nil end
     local ok, ws = pcall(function() return gi:GetStartingWorlds() end)
     if not ok or type(ws) ~= "table" then return nil end
@@ -1725,7 +1734,8 @@ local function qb_units()
 end
 
 local function qb_poll()
-    if not qb.worlds_done then
+    if not qb.worlds_done and os.clock() - (qb.worlds_t or -99) >= 30 then   -- lista de mapas + unidades: no máximo de 30 em 30 s
+        qb.worlds_t = os.clock()
         local list = qb_worlds()
         if list and #list > 0 then
             write_file(QB_WORLDS, json.encode(list)); qb.worlds_done = true
