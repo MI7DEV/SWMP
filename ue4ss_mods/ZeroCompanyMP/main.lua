@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.16
+-- ZeroCompanyMP/main.lua — v0.17
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.16 carregado")
+print(" ZeroCompanyMP v0.17 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -883,11 +883,20 @@ local function pvp_groups(sub)
 end
 
 -- passa a seleção para o lado que vai jogar pelo mesmo caminho da tecla TAB (SelectNextCharacter): só assim a
--- câmara vai à unidade e o radial/barra de habilidades abre nela (SetSelectedCharacter direto deixava a UI presa)
-local function pvp_select_side()
+-- câmara vai à unidade e o radial/barra de habilidades abre nela (SetSelectedCharacter direto deixava a UI presa).
+-- Às vezes uma chamada não chega (o radial ficava no herói do J1, já inimigo): repete até a seleção ser do PlayerTeam.
+local function pvp_select_side(tries)
+    tries = tries or 0
+    local st = pvp_statics()
     for _, c in ipairs(FindAllOf("SelectedCharacterComponent") or {}) do
         if valid(c) and c:GetFullName():find("PlayerController") then
+            local ok, sel = pcall(function() return c:GetSelectedCharacter() end)
+            if ok and valid(sel) and valid(st) and team_name(st, sel) == "PlayerTeam_C" then return end
             pcall(function() c:SelectNextCharacter() end)
+            -- sem GetSelectedCharacter não dá para confirmar: fica a uma chamada, como antes
+            if ok and tries < 6 then
+                ExecuteWithDelay(700, function() in_game_thread(function() pvp_select_side(tries + 1) end) end)
+            end
             return
         end
     end
@@ -940,7 +949,8 @@ local function pvp_swap(want)
         pvp.units = {}
         for _, c in ipairs(level_units()) do
             local t = team_name(st, c)
-            if t == "PlayerTeam_C" or t == "EnemyTeam_C" then pvp.units[#pvp.units + 1] = { a = c, p = (t == "PlayerTeam_C") } end
+            -- VIPs/capturados (Char_VIP_*) ficam fora da troca, senão aparecem na barra do J2
+            if (t == "PlayerTeam_C" or t == "EnemyTeam_C") and not c:GetFullName():find("Char_VIP") then pvp.units[#pvp.units + 1] = { a = c, p = (t == "PlayerTeam_C") } end
         end
     end
     local n = 0

@@ -17,11 +17,11 @@
 - **Só jogo original**: SWMP-Host e mod verificam manifesto Steam, assinatura Valve da steam_api64.dll, sem crack.
 
 ## Bugs conhecidos (por ordem)
-1. **Seleção ao passar a vez**: `SelectNextCharacter()` às vezes não seleciona a unidade do novo lado (radial fica no
-   herói do J1, agora inimigo). Com TAB manual funciona. Tentar: chamar depois da câmara rodar, repetir até
-   `GetSelectedCharacter()` ser do PlayerTeam, ou injetar a ação de TAB (procurar `IA_*SelectNext*`).
-2. VIPs/unidades capturadas entram na troca de equipa (são PlayerTeam): no 1x1 excluir quem tem estado
-   "capturado"/VIP (`Char_VIP_*`), senão aparecem na barra do J2.
+1. **Seleção ao passar a vez** — v0.17 (21/10, POR TESTAR no jogo): `pvp_select_side` repete `SelectNextCharacter()`
+   de 700 em 700 ms (até 6×) até `GetSelectedCharacter()` ser do PlayerTeam. Se continuar a falhar: injetar a ação
+   de TAB (procurar `IA_*SelectNext*`).
+2. VIPs na troca de equipa — v0.17 (POR TESTAR): unidades `Char_VIP*` ficam fora de `pvp_swap`. Confirmar que nenhum
+   VIP aparece na barra do J2 e que capturados sem esse nome não entram.
 3. Missões com temporizador (resgate em Ryloth) acabam o 1x1 — para o modo batalha escolher mapas/objetivo
    "derrotar todos" ou desligar objetivos.
 4. Ao reabrir, o jogo às vezes retoma direto a última missão (sem passar pelo menu) — a Batalha Rápida só funciona
