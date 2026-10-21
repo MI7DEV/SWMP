@@ -24,7 +24,8 @@
 3. ~~Missões com temporizador~~ — RESOLVIDO v0.18 (testado 21/10 em Ryloth 010): a cada troca de vez
    `pvp_hold_timers` repõe `BRGameTacticalTimer.DurationRemaining` = `DurationToCount` (mín. 2); ficou 4/4 e 6/6
    após 3 fins de vez. Objetivos de resgate/evacuação continuam ativos (o J1 ainda pode ganhar evacuando).
-4. Ao reabrir, o jogo às vezes retoma direto a última missão (sem passar pelo menu) — a Batalha Rápida só funciona
+4. Ao reabrir, o jogo às vezes retoma direto a última missão (acontece quando o jogo é fechado a meio de um combate;
+   sair: `PlayerController:ClientReturnToMainMenuWithTextReason`) (sem passar pelo menu) — a Batalha Rápida só funciona
    a partir do menu principal (`qb_vm` só existe lá).
 
 ## Próximos passos (pedidos do Marco)
@@ -33,13 +34,14 @@
    PlayerTeam durante a vez dele, a mira nativa já deve calcular cobertura e % — **verificar** com um ataque real
    (tecla 2 → hover num herói → ver % e cobertura; ver também `UBRG_TargetedActorVM`). Confirmar também o
    "overwatch/reação" do lado que não está a jogar.
-2. **Modo batalha** — FEITO v0.19 (testado 21/10, Ryloth 010, 4x4): no portal, com 1x1 marcado, cada jogador escolhe
-   até 4 personagens (Equipa A/B). `mp_qb_cmd.json` leva `squad` (A depois B, caminhos de classe) + `team_b`; o mod
-   escreve `BRG_MissionTestingSettings.DefaultMissionSquad`, e no combate (`qb_battle_setup`) teleporta a B para as
-   posições dos inimigos do mapa (`BitReactorGameStatics_Unit:TeleportActor`, tenta o ponto seguinte se devolver false),
-   remove esses inimigos (`K2_DestroyActor`, estável) e passa a B a EnemyTeam. Falta: lista de personagens só tem os 8
-   conhecidos (`QB_HEROES` no index.html) — descobrir o roster completo; só há 4 pontos de entrada da equipa A
-   (mais de 4 ficam empilhados); posições aleatórias; testar noutros mapas.
+2. **Modo batalha** — FEITO v0.20 (testado 21/10, Ryloth 010, até 8x8): no portal, com 1x1 marcado, lista de TODAS
+   as unidades (o mod grava `mp_units.json` a partir do registo de assets `/Game/Game/Core/Pawns`: heróis, campanha,
+   inimigos por facção), filtro por texto/grupo, +A/+B e quantas de cada. LANÇAR escreve `mp_qb_cmd.json`
+   (`squad` = A depois B, `team_b`) e abre o jogo pela Steam; o mod espera até 5 min pelo menu principal e lança.
+   No combate (`qb_battle_setup`): B vai para as posições dos inimigos do mapa (`TeleportActor`), esses inimigos saem
+   (`K2_DestroyActor`), B passa a EnemyTeam; `qb_spread` espalha as unidades empilhadas (anéis de 150 uu), com 2.ª
+   passagem aos 4 s (o jogo repõe os pontos de entrada logo no início). Unidades inimigas (B1, Droideka, clones…)
+   funcionam no esquadrão e o J2 controla-as com a interface nativa. Falta: testar noutros mapas e bosses.
 3. **Co-op (modo história)**: cada um escolhe 3 personagens; mesmo turno do jogador dividido (J1 joga os seus 3,
    depois o J2 os seus 3) contra a IA. **Requisito do Marco: dois ecrãs/jogos separados** (cada um no seu PC com o
    seu jogo original, só vê as suas unidades). Isto exige sincronizar dois jogos (lockstep: replicar cada ação —

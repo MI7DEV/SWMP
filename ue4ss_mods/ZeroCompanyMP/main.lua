@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.19
+-- ZeroCompanyMP/main.lua — v0.20
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.19 carregado")
+print(" ZeroCompanyMP v0.20 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -1075,7 +1075,11 @@ do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('
 -- o mod escreve a lista de mapas em mp_qb_worlds.json e o estado em mp_qb.json.
 local QB_CMD, QB_STATE, QB_WORLDS = MOD_PATH .. "\\mp_qb_cmd.json", MOD_PATH .. "\\mp_qb.json", MOD_PATH .. "\\mp_qb_worlds.json"
 local qb = { cmd_ts = 0, pvp = false, restore = false, worlds_done = false, launched_at = 0 }
-do local raw = read_file(QB_CMD); if raw then qb.cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
+-- ao arrancar ignora pedidos antigos; um pedido dos últimos 5 min (portal: "lançar e abrir o jogo") ainda corre
+do local raw = read_file(QB_CMD); if raw then
+    local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+    qb.cmd_ts = (os.time() - ts < 300) and 0 or ts
+end end
 
 local function qb_state(status)
     write_file(QB_STATE, json.encode({ status = status, ts = os.time() }))
@@ -1171,15 +1175,53 @@ local function qb_launch(world_path, pvp, squad)
     qb_state("a carregar " .. w.Name .. (pvp and " (1x1)" or "") .. " — " .. table.concat(log, " "))
 end
 
+-- todas as unidades jogáveis (registo de assets: /Game/Game/Core/Pawns) para o portal escolher as equipas
+local QB_UNITS = MOD_PATH .. "\\mp_units.json"
+local function qb_units()
+    local h = StaticFindObject("/Script/AssetRegistry.Default__AssetRegistryHelpers")
+    if not valid(h) then return nil end
+    local ar = h:GetAssetRegistry()
+    local t = {}
+    ar:GetAssetsByPath(FName("/Game/Game/Core/Pawns"), t, true, false)
+    local seen, list = {}, {}
+    for _, a in ipairs(t) do
+        local ok, pk, nm = pcall(function() local d = a:get(); return d.PackageName:ToString(), d.AssetName:ToString() end)
+        if ok then
+            local base = nm:gsub("_C$", "")
+            local grp = pk:match("/EnemyCharacters/([^/]+)/") and ("Inimigos: " .. pk:match("/EnemyCharacters/([^/]+)/"))
+                or (pk:find("/CampaignCharacters/") and "Campanha") or ((pk:find("/HeroCharacters/") or pk:find("/Pawns/Char_Hero_")) and "Heróis")
+            if grp and base:find("^Char_") and not seen[base] and not pk:find("/VIP/") and not pk:find("/WeaponTesting/")
+                and not base:find("Base") and not base:find("Cine") and not base:find("Prototype") and not base:find("ExploreNPC")
+                and not base:find("Tutorial") and not base:find("DEPRICATED") and not base:find("_TEMP") and base ~= "Char_Hero_Humanoid" then
+                seen[base] = true
+                list[#list + 1] = { name = base:gsub("^Char_Hero_", ""):gsub("^Char_Enemy_", ""):gsub("^Char_", ""):gsub("_", " "), path = pk .. "." .. base .. "_C", group = grp }
+            end
+        end
+    end
+    table.sort(list, function(x, y) if x.group ~= y.group then return x.group < y.group end return x.name < y.name end)
+    return list
+end
+
 local function qb_poll()
     if not qb.worlds_done then
         local list = qb_worlds()
-        if list and #list > 0 then write_file(QB_WORLDS, json.encode(list)); qb.worlds_done = true end
+        if list and #list > 0 then
+            write_file(QB_WORLDS, json.encode(list)); qb.worlds_done = true
+            local ok, units = pcall(qb_units)
+            if ok and units and #units > 0 then write_file(QB_UNITS, json.encode(units)) end
+            print("[ZeroCompanyMP] Unidades para o portal: " .. (ok and units and #units or tostring(units)))
+        end
     end
     local raw = read_file(QB_CMD)
     if not raw then return end
     local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
     if ts <= qb.cmd_ts then return end
+    -- o portal pode pedir a batalha antes de o jogo abrir: espera (até 5 min) que o menu principal esteja pronto
+    if not qb_vm() and os.time() - ts < 300 then
+        if not qb.waiting then qb.waiting = true; qb_state("à espera do menu principal do jogo…") end
+        return
+    end
+    qb.waiting = false
     qb.cmd_ts = ts
     local ok, c = pcall(json.decode, raw)
     if ok and type(c) == "table" and c.cmd == "launch" and type(c.world) == "string" then
@@ -1191,38 +1233,88 @@ end
 -- Modo batalha: o esquadrão lançado tem as duas equipas (A primeiro, as últimas team_b entradas são a B).
 -- Já no mapa, a equipa B ocupa as posições dos inimigos do mapa (TeleportActor), esses inimigos saem
 -- (K2_DestroyActor, testado estável em 21/10) e a B passa a EnemyTeam — o 1x1 depois alterna as duas.
+-- unidades empilhadas no mesmo ponto (o mapa só tem 4 pontos de entrada por lado): cada uma que caia em cima de
+-- outra procura, em anéis de 150 uu à volta, um sítio que o TeleportActor aceite
+local function qb_spread(su, units)
+    local placed = {}
+    local function near(l)
+        for _, p in ipairs(placed) do if math.abs(p.X - l.X) < 60 and math.abs(p.Y - l.Y) < 60 then return true end end
+        return false
+    end
+    for _, u in ipairs(units) do
+        local l = u:K2_GetActorLocation()
+        local L = { X = l.X, Y = l.Y, Z = l.Z }
+        if near(L) then
+            local r = u:K2_GetActorRotation()
+            local R = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll }
+            local done = false
+            for ring = 1, 5 do
+                for dx = -ring, ring do
+                    for dy = -ring, ring do
+                        if not done and (math.abs(dx) == ring or math.abs(dy) == ring) then
+                            local T = { X = L.X + dx * 150, Y = L.Y + dy * 150, Z = L.Z }
+                            if not near(T) then
+                                local ok, moved = pcall(function() return su:TeleportActor(u, T, R, false, false) end)
+                                if ok and moved then done = true; L = T end
+                            end
+                        end
+                    end
+                end
+                if done then break end
+            end
+        end
+        placed[#placed + 1] = L
+    end
+end
+
 local function qb_battle_setup(squad, team_b)
-    if type(squad) ~= "table" or not team_b or team_b < 1 then return end
+    if type(squad) ~= "table" then return end
+    team_b = team_b or 0
     local st, su = pvp_statics()
     local te = StaticFindObject(TEAM_PATH.E)
     if not (valid(st) and valid(su) and valid(te)) then return end
     local want = {}                                   -- classe -> quantas unidades dessa classe são da equipa B
     for i = #squad - team_b + 1, #squad do local p = squad[i]; if type(p) == "string" then want[p] = (want[p] or 0) + 1 end end
-    local heroes_b, enemies = {}, {}
+    local heroes_a, heroes_b, enemies = {}, {}, {}
     for _, c in ipairs(level_units()) do
         local t = team_name(st, c)
         if t == "EnemyTeam_C" then enemies[#enemies + 1] = c
         elseif t == "PlayerTeam_C" then
             local cls = c:GetClass():GetFullName():gsub("^%S+%s+", "")
-            if (want[cls] or 0) > 0 then want[cls] = want[cls] - 1; heroes_b[#heroes_b + 1] = c end
+            if (want[cls] or 0) > 0 then want[cls] = want[cls] - 1; heroes_b[#heroes_b + 1] = c
+            else heroes_a[#heroes_a + 1] = c end
         end
     end
+    pcall(qb_spread, su, heroes_a)
+    -- logo no início o jogo ainda volta a pôr as unidades nos pontos de entrada: espalha outra vez depois
+    ExecuteWithDelay(4000, function() in_game_thread(function()
+        local alive_a, alive_b = {}, {}
+        for _, u in ipairs(heroes_a) do if valid(u) then alive_a[#alive_a + 1] = u end end
+        for _, u in ipairs(heroes_b) do if valid(u) then alive_b[#alive_b + 1] = u end end
+        pcall(qb_spread, su, alive_a); pcall(qb_spread, su, alive_b)
+    end) end)
+    if team_b < 1 then return end
     local spots = {}
     for _, e in ipairs(enemies) do
         local l, r = e:K2_GetActorLocation(), e:K2_GetActorRotation()
         spots[#spots + 1] = { L = { X = l.X, Y = l.Y, Z = l.Z }, R = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } }
     end
     -- o TeleportActor recusa alguns pontos (devolve false): tenta o ponto seguinte até um aceitar
-    local next_spot = 1
+    -- mais unidades B do que inimigos no mapa: as que sobram vão (forçado) para o 1.º ponto e o qb_spread espalha-as
+    local next_spot, first = 1, nil
     for _, h in ipairs(heroes_b) do
-        while next_spot <= #spots do
+        local moved = false
+        while next_spot <= #spots and not moved do
             local s = spots[next_spot]
             next_spot = next_spot + 1
-            local ok, moved = pcall(function() return su:TeleportActor(h, s.L, s.R, false, false) end)
-            if ok and moved then break end
+            local ok, r = pcall(function() return su:TeleportActor(h, s.L, s.R, false, false) end)
+            moved = ok and r
+            if moved and not first then first = s end
         end
+        if not moved and first then pcall(function() su:TeleportActor(h, first.L, first.R, false, true) end) end
         pcall(function() su:ChangeActorTeam(h, te, true) end)
     end
+    pcall(qb_spread, su, heroes_b)
     if #heroes_b > 0 then
         for _, e in ipairs(enemies) do if valid(e) then pcall(function() e:K2_DestroyActor() end) end end
     end
@@ -1235,7 +1327,7 @@ local function qb_after_combat_start()
     qb.restore = false
     qb_mission_testing(false)
     qb_state("em combate")
-    if qb.team_b then
+    if qb.squad then
         local okb, e = pcall(qb_battle_setup, qb.squad, qb.team_b)
         if not okb then print("[ZeroCompanyMP] Modo batalha erro: " .. tostring(e)) end
         qb.squad, qb.team_b = nil, nil
