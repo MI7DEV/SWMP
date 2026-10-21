@@ -17,11 +17,10 @@
 - **Só jogo original**: SWMP-Host e mod verificam manifesto Steam, assinatura Valve da steam_api64.dll, sem crack.
 
 ## Bugs conhecidos (por ordem)
-1. **Seleção ao passar a vez** — v0.17 (21/10, POR TESTAR no jogo): `pvp_select_side` repete `SelectNextCharacter()`
-   de 700 em 700 ms (até 6×) até `GetSelectedCharacter()` ser do PlayerTeam. Se continuar a falhar: injetar a ação
-   de TAB (procurar `IA_*SelectNext*`).
-2. VIPs na troca de equipa — v0.17 (POR TESTAR): unidades `Char_VIP*` ficam fora de `pvp_swap`. Confirmar que nenhum
-   VIP aparece na barra do J2 e que capturados sem esse nome não entram.
+1. ~~Seleção ao passar a vez~~ — RESOLVIDO v0.17 (testado 21/10 em Ryloth 010): `pvp_select_side` repete
+   `SelectNextCharacter()` até `GetSelectedCharacter()` ser do PlayerTeam; J1→J2 seleciona B1_C_0, J2→J1 seleciona HAWKS.
+2. ~~VIPs na troca~~ — v0.17: `Char_VIP*` fora de `pvp_swap`. Em Ryloth 010 os `Char_VIP_Civilian_Captured_*` são
+   CivilianTeam e ficam fora da troca (J2 = 12 B1, J1 = 4 heróis).
 3. Missões com temporizador (resgate em Ryloth) acabam o 1x1 — para o modo batalha escolher mapas/objetivo
    "derrotar todos" ou desligar objetivos.
 4. Ao reabrir, o jogo às vezes retoma direto a última missão (sem passar pelo menu) — a Batalha Rápida só funciona
