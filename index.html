@@ -554,6 +554,16 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <button class="install-btn" id="net-join" style="flex:0 0 auto;padding:9px 18px">👥 ENTRAR (convidado)</button>
       <button class="install-btn" id="net-leave" style="flex:0 0 auto;padding:9px 18px;display:none">■ SAIR</button>
     </div>
+    <div id="net-invite" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.3);border-radius:8px">
+      <div style="font-size:11px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Convite — envia só ao teu amigo</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <code id="net-invite-code" style="flex:0 1 auto;min-width:0;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--fg);font-size:16px;letter-spacing:.12em;word-break:break-all"></code>
+        <button class="copy-btn" id="net-copy-code">📋 Copiar código</button>
+        <button class="copy-btn" id="net-copy-link">🔗 Copiar link de convite</button>
+        <span id="net-copy-ok" style="font-size:12px;color:#4ade80"></span>
+      </div>
+      <div style="font-size:11px;color:var(--fg2);margin-top:8px">Com o link, o amigo abre a página já com o código preenchido e só carrega em <b style="color:var(--fg)">ENTRAR</b>. Cada sessão gera um código novo.</div>
+    </div>
     <div id="net-info" style="font-size:12px;color:var(--fg2);margin-top:10px"></div>
     <div id="net-save-row" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
       <button class="install-btn" id="net-save-send" style="flex:0 0 auto;padding:9px 18px;display:none">📤 ENVIAR SAVE AO CONVIDADO</button>
@@ -2515,7 +2525,13 @@ async function _netStart(role){
     _net.peer.on('error',function(e){ _netInfo('Erro: '+(e.type==='peer-unavailable'?'código não encontrado — confirma com o anfitrião':(e.message||e.type))); });
     document.getElementById('net-leave').style.display='';
     if(role==='host'){
-      _net.peer.on('open',function(){ _netState('à espera'); _netInfo('Código da sessão: '+code+' — envia-o só ao convidado.'); document.getElementById('net-code').value=code; });
+      _net.peer.on('open',function(){
+        _netState('à espera'); _netInfo('Sessão criada — copia o código ou o link e envia ao convidado.');
+        document.getElementById('net-code').value=code;
+        document.getElementById('net-invite-code').textContent=code;
+        document.getElementById('net-copy-ok').textContent='';
+        document.getElementById('net-invite').style.display='block';
+      });
       _net.peer.on('connection',function(c){
         var ok=c.metadata&&typeof c.metadata.secret==='string'&&c.metadata.secret===_net.secret;
         if(!ok||(_net.conn&&_net.conn.open)){ c.on('open',function(){ c.close(); }); return; }
@@ -2531,8 +2547,26 @@ function _netLeave(quiet){
   try{ _net.conn&&_net.conn.close(); }catch(e){} try{ _net.peer&&_net.peer.destroy(); }catch(e){}
   if(_net.role&&!quiet) _netCmd(false);
   _net.peer=_net.conn=null; _net.sentSeq=0; _net.inMsgs=[];
+  document.getElementById('net-invite').style.display='none';
   if(!quiet){ _netState('desligado'); _netInfo(''); document.getElementById('net-leave').style.display='none'; document.getElementById('net-save-row').style.display='none'; }
 }
+// convite: o código vai no # do link (não chega ao servidor); ao abrir o link o código fica preenchido
+function _netInviteLink(){ return location.origin+'/coop#join='+encodeURIComponent(document.getElementById('net-invite-code').textContent); }
+async function _netCopy(text,what){
+  var ok=document.getElementById('net-copy-ok');
+  try{ await navigator.clipboard.writeText(text); ok.textContent='✓ '+what+' copiado'; }
+  catch(e){ var t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); ok.textContent='✓ '+what+' copiado'; }
+}
+document.getElementById('net-copy-code').addEventListener('click',function(){ _netCopy(document.getElementById('net-invite-code').textContent,'Código'); });
+document.getElementById('net-copy-link').addEventListener('click',function(){ _netCopy(_netInviteLink(),'Link'); });
+(function(){
+  var m=/^#join=([A-Z2-9]{6}-[A-Z2-9]{10})$/.exec(decodeURIComponent(location.hash||''));
+  if(!m) return;
+  document.getElementById('net-code').value=m[1];
+  _netInfo('Convite recebido — carrega em ENTRAR (convidado).');
+  setTimeout(function(){ document.getElementById('net-section').scrollIntoView({behavior:'smooth',block:'center'}); },400);
+  history.replaceState(null,'',location.pathname);   // o código não fica no histórico/barra
+})();
 // saves: %LOCALAPPDATA%\SWZeroCompany\Saved\SaveGames — o anfitrião envia, o convidado guarda (com cópia de segurança)
 async function _netSaveDir(){
   alert('Escolhe a pasta dos saves do jogo:\n%LOCALAPPDATA%\\SWZeroCompany\\Saved\\SaveGames\n\n(cola esse caminho na barra do Explorador)');
