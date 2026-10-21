@@ -42,6 +42,13 @@
    (`K2_DestroyActor`), B passa a EnemyTeam; `qb_spread` espalha as unidades empilhadas (anéis de 150 uu), com 2.ª
    passagem aos 4 s (o jogo repõe os pontos de entrada logo no início). Unidades inimigas (B1, Droideka, clones…)
    funcionam no esquadrão e o J2 controla-as com a interface nativa. Falta: testar noutros mapas e bosses.
+3. **Co-op por Remote Play — FEITO v0.21 (testado 21/10 em Ryloth 010, um PC):** portal "Co-op — modo história"
+   (LIGAR/DESLIGAR + J1/J2 por personagem) ou F9. `coop_turn_order` mete um 2.º BP_PlayerTurnGroup logo a seguir ao
+   1.º em OrderedTurnGroups (6→7 grupos): ronda = vez do J1 → vez do J2 → civis → IA. Gancho RequestEndTurn alterna a
+   vez; `coop_poll` (1 s) tira a seleção de personagens do outro (SelectNextCharacter até ser do dono da vez).
+   Temporizadores: +1 ao fim da vez do J1 (a vez extra desconta). Estado/donos em mp_coop.json. Por ver: recargas e
+   efeitos que contam por turno de equipa podem andar 2x por ronda; testar numa missão da campanha real.
+   **Co-op em dois PCs (cada um com o seu jogo) — ainda NÃO feito**, notas abaixo:
 3. **Co-op (modo história)**: cada um escolhe 3 personagens; mesmo turno do jogador dividido (J1 joga os seus 3,
    depois o J2 os seus 3) contra a IA. **Requisito do Marco: dois ecrãs/jogos separados** (cada um no seu PC com o
    seu jogo original, só vê as suas unidades). Isto exige sincronizar dois jogos (lockstep: replicar cada ação —

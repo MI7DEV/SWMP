@@ -1,4 +1,4 @@
--- ZeroCompanyMP/main.lua — v0.20
+-- ZeroCompanyMP/main.lua — v0.21
 -- Classes confirmadas via ZCSDK jmap (SWZeroCompany-5.6.1-199049.jmap)
 -- Módulo do jogo: BitReactorGame
 
@@ -459,7 +459,7 @@ ExecuteWithDelay(3000, function() in_game_thread(function()
 end) end)
 
 print("==============================================")
-print(" ZeroCompanyMP v0.20 carregado")
+print(" ZeroCompanyMP v0.21 carregado")
 print(" Classes: confirmadas via ZCSDK jmap 5.6.1")
 print(" IsPlayerTurn: BP_BrunoFunctionLibrary")
 print(" RequestEndTurn: BP_BrunoGameplayMaster")
@@ -1069,6 +1069,176 @@ end)
 -- ignora comandos antigos que já estavam no ficheiro ao arrancar
 do local raw = read_file(PVP_CMD); if raw then pvp_cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
 
+-- ─── Co-op (modo história, o amigo entra por Steam Remote Play Together) ──────────────────────────
+-- Cada personagem do esquadrão é do Jogador 1 ou do Jogador 2. O turno do jogador passa a acontecer duas vezes por
+-- ronda (um segundo BP_PlayerTurnGroup logo a seguir ao primeiro em OrderedTurnGroups): na 1.ª vez joga o J1, na 2.ª o
+-- J2, depois a IA. Em cada vez, selecionar um personagem do outro salta para o seguinte do dono da vez.
+-- Controlo: tecla F9 no jogo (divisão alternada), ou o portal escreve mp_coop_cmd.json
+-- {"cmd":"on|off","owners":{"Char_Hero_X_C_0":2,...},"ts":N}; estado em mp_coop.json.
+local COOP_CMD, COOP_STATE = MOD_PATH .. "\\mp_coop_cmd.json", MOD_PATH .. "\\mp_coop.json"
+local coop_on, coop_cmd_ts = false, 0
+local coop = { phase = 1, owners = {}, sub = nil, saved = nil, hooked = false }
+do local raw = read_file(COOP_CMD); if raw then coop_cmd_ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0 end end
+
+local function coop_squad()
+    local st = pvp_statics()
+    local t = {}
+    if not valid(st) then return t end
+    for _, c in ipairs(level_units()) do
+        if team_name(st, c) == "PlayerTeam_C" and not c:GetFullName():find("Char_VIP") then t[#t + 1] = c end
+    end
+    return t
+end
+
+local function coop_report()
+    local parts = {}
+    for _, c in ipairs(coop_squad()) do
+        local n = c:GetFName():ToString()
+        parts[#parts + 1] = ('{"name":%s,"owner":%d}'):format(json.encode(n), coop.owners[n] or 1)
+    end
+    write_file(COOP_STATE, ('{"active":%s,"phase":%d,"units":[%s],"ts":%d}'):format(tostring(coop_on), coop.phase, table.concat(parts, ","), os.time()))
+end
+
+-- dono por omissão: alterna J1/J2 pela ordem do esquadrão
+local function coop_default_owners()
+    local i = 0
+    for _, c in ipairs(coop_squad()) do
+        local n = c:GetFName():ToString()
+        if not coop.owners[n] then i = i + 1; coop.owners[n] = (i % 2 == 1) and 1 or 2 else i = i + 1 end
+    end
+end
+
+local function coop_selected()
+    for _, c in ipairs(FindAllOf("SelectedCharacterComponent") or {}) do
+        if valid(c) and c:GetFullName():find("PlayerController") then
+            local ok, s = pcall(function() return c:GetSelectedCharacter() end)
+            return c, (ok and valid(s)) and s or nil
+        end
+    end
+end
+
+-- seleciona um personagem do dono da vez (até 8 tentativas — o TAB do jogo percorre o esquadrão)
+local function coop_select_phase()
+    local comp, sel = coop_selected()
+    if not comp then return end
+    for _ = 1, 8 do
+        if sel and (coop.owners[sel:GetFName():ToString()] or 1) == coop.phase then return end
+        pcall(function() comp:SelectNextCharacter() end)
+        local ok, s = pcall(function() return comp:GetSelectedCharacter() end)
+        sel = (ok and valid(s)) and s or nil
+    end
+end
+
+-- o 2.º turno do jogador conta mais uma vez nos temporizadores de missão: devolve essa unidade
+local function coop_timer_fix()
+    for _, t in ipairs(FindAllOf("BRGameTacticalTimer") or {}) do
+        if valid(t) and t:GetFullName():find(":PersistentLevel%.") then
+            pcall(function() if t.DurationRemaining < t.DurationToCount then t.DurationRemaining = t.DurationRemaining + 1 end end)
+        end
+    end
+end
+
+local function coop_hook()
+    if coop.hooked then return end
+    coop.hooked = pcall(function()
+        RegisterHook("/Game/Game/Core/Blueprints/BP_BrunoGameplayMaster.BP_BrunoGameplayMaster_C:RequestEndTurn", function()
+            if not coop_on then return end
+            local was = coop.phase
+            coop.phase = (was == 1) and 2 or 1
+            if was == 1 then pcall(coop_timer_fix) end
+            print(("[ZeroCompanyMP] Co-op: vez do JOGADOR %d"):format(coop.phase))
+            if coop.phase == 2 then ExecuteWithDelay(1500, function() in_game_thread(coop_select_phase) end) end
+        end)
+    end)
+end
+
+-- 2.º BP_PlayerTurnGroup logo a seguir ao primeiro (guarda a ordem original para repor)
+local function coop_turn_order(on)
+    local sub = pvp_subsys()
+    if not sub then return false end
+    local arr = sub.OrderedTurnGroups
+    if on then
+        local list, pg, pgi = {}, nil, nil
+        arr:ForEach(function(i, g)
+            local grp = g:get()
+            list[#list + 1] = grp
+            if valid(grp) and not pg and grp:GetFName():ToString():find("^BP_PlayerTurnGroup") then pg, pgi = grp, i end
+        end)
+        if not pg then print("[ZeroCompanyMP] Co-op: grupo de turno do jogador não encontrado"); return false end
+        local n = #list
+        local ok = pcall(function()
+            arr[n + 1] = list[n]
+            for i = n, pgi + 2, -1 do arr[i] = list[i - 1] end
+            arr[pgi + 1] = pg
+        end)
+        coop.sub, coop.saved = sub, list
+        print(("[ZeroCompanyMP] Co-op: turno do jogador duplicado (%d grupos -> %d) %s"):format(n, arr:GetArrayNum(), ok and "ok" or "falhou"))
+        return ok
+    elseif coop.sub == sub and coop.saved then
+        pcall(function()
+            arr:Empty()
+            for i, g in ipairs(coop.saved) do arr[i] = g end
+        end)
+        print("[ZeroCompanyMP] Co-op: ordem de turnos reposta")
+    end
+    coop.sub, coop.saved = nil, nil
+    return true
+end
+
+local function coop_set(on, owners)
+    if type(owners) == "table" then
+        for n, o in pairs(owners) do coop.owners[n] = (tonumber(o) == 2) and 2 or 1 end
+    end
+    if on then
+        if not check_genuine() then print("[ZeroCompanyMP] Co-op recusado — jogo não verificado como original: " .. genuine_why); return end
+        if pvp_on then pvp_set(false) end
+        if not coop_on then
+            coop_hook()
+            if not coop_turn_order(true) then return end
+            coop.phase = 1
+            coop_on = true
+        end
+        coop_default_owners()
+        coop_select_phase()
+    elseif coop_on then
+        coop_on = false
+        pcall(function() coop_turn_order(false) end)
+    end
+    print("[ZeroCompanyMP] Co-op " .. (coop_on and "LIGADO" or "DESLIGADO"))
+    pcall(coop_report)
+end
+
+local function coop_poll()
+    if coop.sub and not valid(coop.sub) then              -- missão acabou: a ordem de turnos foi com ela
+        coop.sub, coop.saved = nil, nil
+        if coop_on then coop_on = false; print("[ZeroCompanyMP] Co-op terminou com a missão") end
+    end
+    local raw = read_file(COOP_CMD)
+    if raw then
+        local ts = tonumber(raw:match('"ts"%s*:%s*(%d+)')) or 0
+        if ts > coop_cmd_ts then
+            coop_cmd_ts = ts
+            local ok, c = pcall(json.decode, raw)
+            if ok and type(c) == "table" then
+                if c.cmd == "on" then coop_set(true, c.owners)
+                elseif c.cmd == "off" then coop_set(false)
+                elseif c.cmd == "owners" then coop_set(coop_on, c.owners) end
+            end
+        end
+    end
+    if coop_on then
+        -- personagem do outro jogador selecionado: passa para um do dono da vez
+        local _, sel = coop_selected()
+        if sel and (coop.owners[sel:GetFName():ToString()] or 1) ~= coop.phase then coop_select_phase() end
+    end
+    if combat_active then pcall(coop_report) end
+end
+
+pcall(function()
+    RegisterKeyBind(Key.F9, function() ExecuteInGameThread(function() coop_set(not coop_on) end) end)
+    print("[ZeroCompanyMP] Co-op: F9 liga/desliga")
+end)
+
 -- ─── Batalha Rápida: mapa escolhido → esquadrão → combate direto ──────────────
 -- Usa o lançamento rápido que os programadores deixaram no jogo (B_QuickLaunchViewModel + BRG_MissionTestingSettings).
 -- O portal escreve mp_qb_cmd.json {"cmd":"launch","world":"/Game/.../SK_Ryloth_010_Root.SK_Ryloth_010_Root","pvp":bool,"ts":N};
@@ -1346,6 +1516,7 @@ local function tick()
     end
     pcall(poll)
     pcall(pvp_poll)
+    pcall(coop_poll)
     pcall(qb_poll)
     pcall(qb_after_combat_start)
     if scene_tick % 2 == 0 then pcall(update_scene); pcall(ig_tick); pcall(apply_music_mute) end

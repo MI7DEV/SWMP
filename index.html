@@ -418,6 +418,29 @@ main{position:relative;z-index:10;padding-block:22px 40px;max-width:1200px;margi
       <span id="pvp-info" style="font-size:12px;color:var(--fg2)"></span>
     </div>
   </div>
+
+  <!-- ── Co-op no modo história (Remote Play) ── -->
+  <div id="coop-section" style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:clamp(13px,2vw,17px);letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      🤝 Co-op — modo história <span id="coop-state" style="font-size:11px;color:var(--fg2);background:rgba(255,255,255,.07);padding:2px 8px;border-radius:12px;font-family:'Exo 2',sans-serif;letter-spacing:.04em">desligado</span>
+    </h2>
+    <p style="font-size:12px;color:var(--fg2);line-height:1.7;margin-bottom:12px">
+      Jogas a campanha normalmente; o amigo entra pelo <b style="color:var(--fg)">Steam Remote Play Together</b>. Em cada combate os personagens
+      dividem-se entre <b style="color:var(--fg)">Jogador 1</b> e <b style="color:var(--fg)">Jogador 2</b>: em cada ronda joga primeiro o J1 com os seus, carrega em
+      <b style="color:var(--fg)">Terminar turno</b> e joga o J2 com os dele; depois joga a IA.
+    </p>
+    <ol style="font-size:12px;color:var(--fg2);line-height:1.9;margin:0 0 14px 18px">
+      <li>No Steam: <b style="color:var(--fg)">Shift+Tab → Amigos → (amigo) → Remote Play Together</b>.</li>
+      <li>No início de cada combate carrega em <b style="color:var(--fg)">LIGAR CO-OP</b> (ou <b style="color:var(--fg)">F9</b> no jogo).</li>
+      <li>Escolhe abaixo quem controla cada personagem (muda a qualquer momento).</li>
+    </ol>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="install-btn" id="coop-on" style="flex:0 0 auto;padding:9px 18px">🤝 LIGAR CO-OP</button>
+      <button class="install-btn" id="coop-off" style="flex:0 0 auto;padding:9px 18px">■ DESLIGAR</button>
+      <span id="coop-info" style="font-size:12px;color:var(--fg2)"></span>
+    </div>
+    <div id="coop-units" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"></div>
+  </div>
 </section>
 
 <section class="page" data-page="mods">
@@ -2234,6 +2257,44 @@ async function _pvpPoll(){
     else if(d.active&&fresh) document.getElementById('pvp-info').textContent='Ronda '+(d.round||'—')+' · vez de: '+(d.current||'—')+' · '+(d.units||0)+' unidades em campo';
   }catch(e){}
 }
+// ── Co-op (história): o mod lê mp_coop_cmd.json {cmd, owners:{unidade:1|2}} e escreve o estado em mp_coop.json ──
+var COOP_CMD_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_coop_cmd.json';
+var COOP_STATE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_coop.json';
+var _coopUnits=[];
+async function _coopCmd(cmd,owners){
+  var info=document.getElementById('coop-info');
+  try{
+    var root=await _getModsDir(); if(!root) return;
+    var c={cmd:cmd,ts:Math.floor(Date.now()/1000)}; if(owners) c.owners=owners;
+    await _writeFile(root,COOP_CMD_FILE,JSON.stringify(c));
+    info.textContent=cmd==='off'?'A desligar…':'Pedido enviado ao jogo…'; setTimeout(_coopPoll,1500);
+  }catch(e){ if(e.name!=='AbortError') info.textContent='Erro: '+e.message; }
+}
+function _coopName(n){ return String(n).replace(/_C_\d+$/,'').replace(/^Char_(Hero_|Enemy_)?/,'').replace(/_/g,' '); }
+async function _coopPoll(){
+  if(!_modsDir||document.querySelector('.page.on')?.dataset.page!=='coop') return;
+  try{
+    if(await _modsDir.queryPermission({mode:'readwrite'})!=='granted') return;
+    var txt=await _readText(_modsDir,COOP_STATE_FILE); if(!txt) return;
+    var d=JSON.parse(txt), fresh=Date.now()/1000-(d.ts||0)<15, on=d.active&&fresh;
+    var st=document.getElementById('coop-state');
+    st.textContent=on?'LIGADO':'desligado'; st.style.color=on?'#4ade80':'';
+    document.getElementById('coop-info').textContent=on?'Vez do Jogador '+d.phase:(fresh?'Em combate — carrega em LIGAR CO-OP':'');
+    _coopUnits=fresh?(d.units||[]):[];
+    var btn='padding:3px 10px;font-size:11px;border-radius:5px;border:1px solid var(--border);cursor:pointer;color:var(--fg)';
+    document.getElementById('coop-units').innerHTML=_coopUnits.map(function(u){
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px">'+_qbEsc(_coopName(u.name))+
+        [1,2].map(function(p){ return ' <button data-coop-owner="'+p+'" data-n="'+_qbEsc(u.name)+'" style="'+btn+';background:'+(u.owner===p?'var(--gold);color:#000':'var(--bg2)')+'">J'+p+'</button>'; }).join('')+'</span>';
+    }).join('');
+  }catch(e){}
+}
+document.getElementById('coop-on').addEventListener('click',function(){ _coopCmd('on'); });
+document.getElementById('coop-off').addEventListener('click',function(){ _coopCmd('off'); });
+document.getElementById('coop-units').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-coop-owner]'); if(!b) return;
+  var o={}; o[b.dataset.n]=Number(b.dataset.coopOwner); _coopCmd('owners',o);
+});
+setInterval(_coopPoll,3000);
 // ── Batalha Rápida: o mod lê mp_qb_cmd.json; a lista de mapas vem do jogo (mp_qb_worlds.json), o estado de mp_qb.json ──
 var QB_CMD_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb_cmd.json';
 var QB_STATE_FILE=UE4SS_MODS+'/ZeroCompanyMP/Scripts/mp_qb.json';
